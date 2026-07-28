@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VV DOUBLE 採購配貨中心</title>
+<style>
+:root{
+  --blue:#4472C4; --blue-dark:#2F5597; --blue-light:#EDF1F8;
+  --orange:#ED7D31; --orange-light:#FDF0E5;
+  --bg:#DEE5F2; --card:#FFFFFF; --ink:#33415C; --muted:#7A869C;
+  --line:#D5DCEA; --ok:#3E8E5A; --danger:#C0392B;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{position:sticky;top:0;z-index:50;background:var(--card);box-shadow:0 1px 4px rgba(51,65,92,.12)}
+.hin{max-width:1240px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.hbrand{font-size:17px;font-weight:800;letter-spacing:1px;color:var(--ink)}
+.hbrand span{color:var(--blue)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:20px;padding:6px 16px;font-size:13px;cursor:pointer;font-family:inherit}
+.tab.active{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:700}
+.wrap{max-width:1240px;margin:0 auto;padding:16px}
+.card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(51,65,92,.08);margin-bottom:14px}
+.card h3{margin:0 0 12px;font-size:15px;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 .sub{font-size:12px;color:var(--muted);font-weight:400}
+.grid{display:grid;gap:12px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:860px){.g4,.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.g4,.g3,.g2{grid-template-columns:1fr}}
+.stat{background:var(--blue-light);border-radius:10px;padding:12px 14px}
+.stat .lbl{font-size:12px;color:var(--muted)}
+.stat .num{font-size:26px;font-weight:800;color:var(--ink);line-height:1.3}
+.stat .num.hl{color:var(--orange)}
+.stat .note{font-size:12px;color:var(--muted)}
+.bar-track{background:#E4EAF4;border-radius:6px;height:14px;overflow:hidden;position:relative}
+.bar-fill{background:var(--blue);height:100%;border-radius:6px;min-width:2px;transition:width .3s}
+.bar-fill.orange{background:var(--orange)}
+.bar-row{display:grid;grid-template-columns:110px 1fr 90px;gap:10px;align-items:center;margin-bottom:8px}
+.bar-row .bl{font-size:13px;display:flex;align-items:center;gap:6px;justify-content:flex-end;text-align:right}
+.bar-row .bv{font-size:13px;font-weight:700;white-space:nowrap}
+.bar-row .bv small{color:var(--muted);font-weight:400}
+.swatch{width:14px;height:14px;border-radius:4px;border:1px solid rgba(51,65,92,.25);display:inline-block;flex:none}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:#fff;border-radius:16px;padding:4px 14px;font-size:13px;cursor:pointer;font-family:inherit}
+.chip.active{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:700}
+.btn{border:none;border-radius:8px;padding:8px 18px;font-size:14px;cursor:pointer;font-family:inherit;font-weight:700}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:var(--blue-dark)}
+.btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line);font-weight:400}
+.btn-warn{background:var(--orange);color:#fff}
+.btn-sm{padding:4px 10px;font-size:12px;border-radius:6px}
+.tbl{border-collapse:collapse;width:100%;background:#fff}
+.tbl th{background:var(--blue);color:#fff;padding:7px 8px;font-size:12px;font-weight:700;white-space:nowrap}
+.tbl td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:center;font-size:13px}
+.tbl tfoot td{background:var(--blue-light);font-weight:700}
+.tbl input,.tbl select{width:100%;min-width:44px;border:1px solid var(--line);border-radius:6px;padding:5px 4px;font-size:13px;text-align:center;font-family:inherit;background:#fff}
+.tbl input:focus,.tbl select:focus{outline:2px solid var(--blue);border-color:var(--blue)}
+.tscroll{overflow-x:auto}
+.diff-warn{color:var(--orange);font-weight:800}
+.diff-ok{color:var(--ok);font-weight:700}
+.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:900px){.form-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.form-grid{grid-template-columns:1fr}}
+.fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:700}
+.fld input,.fld select,.fld textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;background:#fff;color:var(--ink)}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:2px solid var(--blue);border-color:var(--blue)}
+.fld textarea{resize:vertical;min-height:64px}
+.imgbox{border:2px dashed var(--line);border-radius:10px;min-height:140px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;background:var(--blue-light)}
+.imgbox img{max-width:100%;max-height:220px;display:block}
+.imgbox .ph{color:var(--muted);font-size:13px;text-align:center;padding:20px}
+.item-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.item-card{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.item-card .thumb{height:150px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.item-card .thumb img{width:100%;height:100%;object-fit:cover}
+.item-card .thumb .noimg{color:var(--muted);font-size:12px}
+.item-card .ib{padding:10px 12px;flex:1}
+.item-card .sn{font-weight:800;font-size:15px}
+.item-card .meta{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.6}
+.item-card .foot{display:flex;gap:6px;padding:0 12px 10px}
+.badge{display:inline-block;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:700}
+.badge-blue{background:var(--blue-light);color:var(--blue-dark)}
+.badge-orange{background:var(--orange-light);color:var(--orange)}
+.tag-x{display:inline-flex;align-items:center;gap:6px;background:var(--blue-light);border-radius:14px;padding:4px 8px 4px 12px;font-size:13px;margin:3px}
+.tag-x b{cursor:pointer;color:var(--muted);font-weight:700}
+.tag-x b:hover{color:var(--danger)}
+.inline-add{display:flex;gap:6px;margin-top:8px}
+.inline-add input{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;font-family:inherit;width:130px}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.empty .big{font-size:34px;margin-bottom:8px}
+#toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:10px;padding:10px 22px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200}
+#toast.show{opacity:1}
+#login{position:fixed;inset:0;background:var(--bg);z-index:150;display:flex;align-items:center;justify-content:center}
+.login-box{background:#fff;border-radius:14px;padding:32px;width:320px;box-shadow:0 4px 20px rgba(51,65,92,.15);text-align:center}
+.login-box h2{margin:0 0 6px;font-size:18px}
+.login-box p{color:var(--muted);font-size:13px;margin:0 0 16px}
+.login-box input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:15px;text-align:center;margin-bottom:12px;font-family:inherit}
+.demo-banner{background:var(--orange);color:#fff;text-align:center;font-size:13px;font-weight:700;padding:5px}
+.sec-title{font-size:13px;font-weight:800;color:var(--blue-dark);margin:14px 0 8px;border-left:4px solid var(--blue);padding-left:8px}
+.hint{font-size:12px;color:var(--muted)}
+.month-card .mth{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.month-card .mth .mname{font-size:17px;font-weight:800}
+.pd-row{display:grid;grid-template-columns:1fr auto;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;align-items:center}
+.pd-row .pn{font-weight:800}
+.pd-row .pm{font-size:12px;color:var(--muted);line-height:1.7}
+.mini-input{width:90px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px;text-align:center;font-family:inherit}
+a{color:var(--blue)}
+.rt-bar{display:flex;gap:4px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;padding:6px 8px;background:var(--blue-light)}
+.rt-bar button{border:1px solid var(--line);background:#fff;border-radius:6px;min-width:28px;height:26px;cursor:pointer;font-size:13px;font-family:inherit;color:var(--ink);padding:0 6px}
+.rt-bar button:hover{border-color:var(--blue)}
+.rt-bar select{width:auto;min-width:0;border:1px solid var(--line);border-radius:6px;height:26px;font-size:12px;font-family:inherit;background:#fff;padding:0 4px}
+.rt-bar .rt-dot{width:20px;height:20px;min-width:20px;border-radius:50%;padding:0;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+.rt-sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+.rt-area{border:1px solid var(--line);border-radius:0 0 8px 8px;min-height:130px;padding:10px 12px;font-size:14px;background:#fff;color:var(--ink);line-height:1.7;outline:none}
+.rt-area:focus{border-color:var(--blue);outline:2px solid var(--blue)}
+.rt-area:empty::before{content:'例：請依照樣板做貨，尺寸表確認後才能做貨…';color:var(--muted)}
+#sheetModal{position:fixed;inset:0;background:rgba(51,65,92,.55);z-index:120;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px}
+.sheet-panel{background:#F2F5FA;border-radius:12px;max-width:900px;width:100%;padding:14px}
+.sheet-actions{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px}
+#sheetBody{background:#fff;padding:28px;border:1px solid var(--line)}
+.sh-title{font-size:20px;font-weight:800;color:var(--ink);text-align:center;margin-bottom:4px;letter-spacing:2px}
+.sh-sub{text-align:center;color:var(--muted);font-size:12px;margin-bottom:14px}
+.sh-tbl{border-collapse:collapse;width:100%;margin-bottom:14px}
+.sh-tbl th{background:var(--blue);color:#fff;font-size:12px;padding:6px 8px;border:1px solid var(--blue-dark);white-space:nowrap}
+.sh-tbl td{border:1px solid #B9C4DA;padding:6px 8px;font-size:13px;text-align:center;color:var(--ink)}
+.sh-tbl td.lbl{background:var(--blue-light);font-weight:700;font-size:12px;white-space:nowrap}
+.sh-2col{display:grid;grid-template-columns:300px 1fr;gap:14px;margin-bottom:14px}
+.sh-imgbox{border:1px solid #B9C4DA;min-height:220px;display:flex;align-items:center;justify-content:center;background:#FAFBFD}
+.sh-imgbox img{max-width:100%;max-height:300px}
+.sh-notes{border:1px solid #B9C4DA;padding:10px 12px;font-size:13px;line-height:1.8;min-height:220px}
+.sh-notes .nt{font-size:12px;font-weight:800;color:var(--blue-dark);margin-bottom:6px}
+.sh-foot{margin-top:12px;font-size:12px;color:var(--ink);line-height:1.9;border-top:2px solid var(--blue);padding-top:8px}
+@media print{
+  body>*{display:none !important}
+  #sheetModal{display:flex !important;position:static;background:#fff;padding:0}
+  .sheet-panel{max-width:none;padding:0;background:#fff}
+  .sheet-actions{display:none !important}
+  #sheetBody{border:none}
+}
+hidden,[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div id="demoBanner" class="demo-banner" hidden>示範模式：資料只存在本頁，不會寫入資料庫（網址去掉 ?demo 即為正式版）</div>
+<header>
+  <div class="hin">
+    <div class="hbrand">VV <span>DOUBLE</span>｜採購配貨中心</div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="overview">總覽</button>
+      <button class="tab" data-tab="form">下單卡</button>
+      <button class="tab" data-tab="list">款式列表</button>
+      <button class="tab" data-tab="periods">檔期管理</button>
+      <button class="tab" data-tab="settings">設定</button>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <section id="page-overview"></section>
+
+  <section id="page-form" hidden>
+    <div class="card">
+      <h3 id="formTitle">新增下單卡 <span class="sub">採購每下一款填一張，儲存後自動彙總到總覽</span></h3>
+      <div class="sec-title">基本資訊</div>
+      <div class="form-grid">
+        <div class="fld"><label>檔期 *</label><select id="f_period"></select></div>
+        <div class="fld"><label>款號 *</label><input id="f_styleNo" placeholder="例：TW1001"></div>
+        <div class="fld"><label>款別</label><input id="f_styleType" placeholder="例：C"></div>
+        <div class="fld"><label>品類 *</label><select id="f_category"></select></div>
+        <div class="fld"><label>廠商名稱</label><input id="f_vendor" placeholder="例：PANDA"></div>
+        <div class="fld"><label>下單日期</label><input id="f_orderDate" type="date"></div>
+        <div class="fld"><label>交貨日期</label><input id="f_deliveryDate" type="date"></div>
+        <div class="fld"><label>預計上架日</label><input id="f_onShelf" type="date"></div>
+        <div class="fld"><label>貨運行</label><input id="f_freight" placeholder="例：鴻海"></div>
+        <div class="fld"><label>運輸方式</label><input id="f_ship" list="shipList" placeholder="例：海運"><datalist id="shipList"><option value="海運"><option value="空運"><option value="快遞"></datalist></div>
+        <div class="fld"><label>付款方式</label><input id="f_pay" placeholder="例：貨運行轉匯"></div>
+        <div class="fld"><label>價格</label><input id="f_price" type="number" min="0" placeholder="單價"></div>
+        <div class="fld"><label>輔料</label><input id="f_accessory"></div>
+        <div class="fld"><label>MOQ</label><input id="f_moq" type="number" min="0" placeholder="例：50"></div>
+        <div class="fld"><label>領標</label><input id="f_label"></div>
+      </div>
+      <div class="form-grid" style="margin-top:12px;grid-template-columns:1fr 2fr">
+        <div class="fld">
+          <label>款式圖片（自動壓縮）</label>
+          <div class="imgbox" id="imgBox"><div class="ph">點擊上傳圖片<br>（存檔前會自動壓縮）</div></div>
+          <input id="f_image" type="file" accept="image/*" hidden>
+          <button class="btn btn-ghost btn-sm" id="imgClear" style="margin-top:6px" hidden>移除圖片</button>
+        </div>
+        <div class="fld"><label>備註</label>
+          <div class="rt-bar">
+            <button type="button" data-cmd="bold" title="粗體"><b>B</b></button>
+            <button type="button" data-cmd="italic" title="斜體"><i>I</i></button>
+            <button type="button" data-cmd="underline" title="底線"><u>U</u></button>
+            <span class="rt-sep"></span>
+            <select id="rt_size" title="文字大小"><option value="">字級</option><option value="2">小</option><option value="3">標準</option><option value="5">大</option><option value="6">特大</option></select>
+            <span class="rt-sep"></span>
+            <button type="button" class="rt-dot" data-color="#33415C" style="background:#33415C" title="深板岩"></button>
+            <button type="button" class="rt-dot" data-color="#4472C4" style="background:#4472C4" title="藍"></button>
+            <button type="button" class="rt-dot" data-color="#ED7D31" style="background:#ED7D31" title="橘"></button>
+            <button type="button" class="rt-dot" data-color="#C0392B" style="background:#C0392B" title="紅"></button>
+            <button type="button" class="rt-dot" data-color="#3E8E5A" style="background:#3E8E5A" title="綠"></button>
+            <span class="rt-sep"></span>
+            <button type="button" id="rt_clear" title="清除格式">清除格式</button>
+          </div>
+          <div id="f_notes" class="rt-area" contenteditable="true"></div>
+        </div>
+      </div>
+
+      <div class="sec-title">訂貨尺寸</div>
+      <div class="tscroll"><table class="tbl" style="max-width:520px">
+        <thead><tr><th style="width:40%">項目</th><th>尺寸(cm)</th><th style="width:50px"></th></tr></thead>
+        <tbody id="measBody"></tbody>
+      </table></div>
+      <button class="btn btn-ghost btn-sm" id="measAdd" style="margin-top:8px">＋ 加一列</button>
+
+      <div class="sec-title">訂貨明細 × 配貨量（顏色 / 尺寸 × 各店＋官網）</div>
+      <p class="hint">「訂購數」＝跟廠商下單的數量；右邊填各店與官網配貨。差異欄＝訂購數 − 已配數（正數表示還有備貨留倉，負數表示配超過）。</p>
+      <div class="tscroll"><table class="tbl" id="detailTbl">
+        <thead id="detailHead"></thead>
+        <tbody id="detailBody"></tbody>
+        <tfoot id="detailFoot"></tfoot>
+      </table></div>
+      <button class="btn btn-ghost btn-sm" id="rowAdd" style="margin-top:8px">＋ 加一列（顏色/尺寸）</button>
+
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="saveItem">儲存下單卡</button>
+        <button class="btn btn-ghost" id="cancelEdit">取消 / 清空</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-list" hidden></section>
+  <section id="page-periods" hidden></section>
+  <section id="page-settings" hidden></section>
+</main>
+
+<div id="login" hidden>
+  <div class="login-box">
+    <h2>VV DOUBLE 採購配貨中心</h2>
+    <p>請輸入密碼</p>
+    <input id="loginPw" type="password" placeholder="密碼">
+    <button class="btn btn-primary" id="loginBtn" style="width:100%">進入</button>
+    <p id="loginErr" style="color:var(--danger);margin-top:10px" hidden>密碼錯誤</p>
+  </div>
+</div>
+<div id="sheetModal" hidden>
+  <div class="sheet-panel">
+    <div class="sheet-actions">
+      <button class="btn btn-primary" id="sheetJpg">匯出 JPG</button>
+      <button class="btn btn-ghost" id="sheetPrint">列印 / 存 PDF</button>
+      <button class="btn btn-ghost" id="sheetClose">關閉</button>
+    </div>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</content>
+</invoke>
+<script>
+/* ================= VV DOUBLE 採購配貨中心 ================= */
+var DEMO = /[?&]demo/.test(location.search);
+var firebaseConfig = {
+  apiKey:"AIzaSyAcdAzwAi65EUnmXAlnnNdL53bNWsjEwZQ",
+  authDomain:"vvdouble-purchase.firebaseapp.com",
+  databaseURL:"https://vvdouble-purchase-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"vvdouble-purchase",
+  storageBucket:"vvdouble-purchase.firebasestorage.app",
+  messagingSenderId:"29856167196",
+  appId:"1:29856167196:web:b5d2f3c624acae226276d9"
+};
+var ROOT='/allocation';
+var DEFAULT_CONFIG = {
+  stores:['忠孝','一中','新一中','高雄','統一','桃園','台南'],
+  baseColors:['白','米','黑','藏青','灰'],
+  accentColors:['黃','橙','藍','粉'],
+  sizes:['F','S','M','L','XL'],
+  categories:[
+    {name:'上衣',pct:30,items:['T恤','襯衫','打底','背心','衛衣','針織衫','防曬衫']},
+    {name:'外套',pct:30,items:['西裝','外套','馬甲','開衫','風衣']},
+    {name:'下搭',pct:30,items:['牛仔褲','西裝褲','休閒褲','短褲','半裙']},
+    {name:'洋裝',pct:10,items:['連衣裙','套裝']}
+  ]
+};
+var SWATCH = {'白':'#FFFFFF','米':'#F1E7D3','黑':'#26282E','藏青':'#1F3A5F','灰':'#9AA0A6','黃':'#F4C430','橙':'#ED7D31','藍':'#4472C4','粉':'#F4A7B9','紅':'#C0392B','綠':'#3E8E5A','咖':'#8B5E3C','卡其':'#BDB08C','軍綠':'#5B6E4F','酒紅':'#7B2D3B','杏':'#EAD9C2','深藍':'#27408B','淺藍':'#A8C6E8'};
+
+var db=null, CONFIG=null, MONTHS={}, PERIODS={}, ITEMS={};
+var currentTab='overview';
+var ovMonth=null, ovPeriod='all';
+var listMonth='all', listPeriod='all', listSearch='';
+var editItemId=null, editPeriodId=null;
+var formRows=[], formMeas=[], formImage='';
+
+/* ---------- 小工具 ---------- */
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function num(v){v=Number(v);return isFinite(v)?v:0;}
+function fmt(n){return num(n).toLocaleString('zh-Hant');}
+function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._tm);t._tm=setTimeout(function(){t.classList.remove('show');},2200);}
+function todayMonth(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function swatchOf(c){return SWATCH[c]||'#CBD3E0';}
+function arr(v){if(Array.isArray(v))return v.filter(function(x){return x!=null;});if(v&&typeof v==='object')return Object.keys(v).sort().map(function(k){return v[k];}).filter(function(x){return x!=null;});return [];}
+function allColors(){return (CONFIG.baseColors||[]).concat(CONFIG.accentColors||[]);}
+function colorType(c){return (CONFIG.baseColors||[]).indexOf(c)>=0?'base':'accent';}
+function groupOf(cat){var g='';(CONFIG.categories||[]).forEach(function(c){if((c.items||[]).indexOf(cat)>=0)g=c.name;});return g;}
+function periodsOfMonth(m){return Object.keys(PERIODS).filter(function(id){return PERIODS[id].month===m;}).sort(function(a,b){return (PERIODS[a].date||'')<(PERIODS[b].date||'')?-1:1;});}
+function monthList(){var s={};Object.keys(PERIODS).forEach(function(id){if(PERIODS[id].month)s[PERIODS[id].month]=1;});Object.keys(MONTHS).forEach(function(m){s[m]=1;});return Object.keys(s).sort().reverse();}
+function itemsOfPeriods(pids){return Object.keys(ITEMS).filter(function(id){return pids.indexOf(ITEMS[id].periodId)>=0;});}
+function itemOrderTotal(it){var t=0;arr(it.rows).forEach(function(r){t+=num(r.orderQty);});return t;}
+function rowAllocCfg(r){var t=num(r.web);CONFIG.stores.forEach(function(s){t+=num(r.alloc&&r.alloc[s]);});return t;}
+function itemAllocTotalCfg(it){var t=0;arr(it.rows).forEach(function(r){t+=rowAllocCfg(r);});return t;}
+
+/* ---------- 資料層（Firebase / 示範模式共用） ---------- */
+var MOCK={}, mockListeners=[], mockKey=1;
+function pGet(obj,path){var parts=path.split('/').filter(Boolean),cur=obj;for(var i=0;i<parts.length;i++){if(cur==null)return null;cur=cur[parts[i]];}return cur==null?null:cur;}
+function pSet(obj,path,val){var parts=path.split('/').filter(Boolean),cur=obj;for(var i=0;i<parts.length-1;i++){if(cur[parts[i]]==null||typeof cur[parts[i]]!=='object')cur[parts[i]]={};cur=cur[parts[i]];}if(val===null)delete cur[parts[parts.length-1]];else cur[parts[parts.length-1]]=val;}
+function mockFire(){mockListeners.forEach(function(l){l.cb(pGet(MOCK,l.path));});}
+function dbOn(path,cb){if(DEMO){mockListeners.push({path:path,cb:cb});cb(pGet(MOCK,path));}else{db.ref(path).on('value',function(s){cb(s.val());});}}
+function dbSet(path,val){if(DEMO){pSet(MOCK,path,JSON.parse(JSON.stringify(val)));mockFire();}else{db.ref(path).set(val);}}
+function dbUpdate(path,val){if(DEMO){Object.keys(val).forEach(function(k){pSet(MOCK,path+'/'+k,val[k]);});mockFire();}else{db.ref(path).update(val);}}
+function dbPush(path,val){var k;if(DEMO){k='demo'+(mockKey++);pSet(MOCK,path+'/'+k,JSON.parse(JSON.stringify(val)));mockFire();}else{k=db.ref(path).push(val).key;}return k;}
+function dbRemove(path){if(DEMO){pSet(MOCK,path,null);mockFire();}else{db.ref(path).remove();}}
+
+function seedDemo(){
+  var cfg=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  MOCK={allocation:{config:cfg,
+    months:{'2026-08':{target:4500}},
+    periods:{
+      p1:{month:'2026-08',name:'8/11檔',date:'2026-08-11',theme:'夏末清爽',colorRatio:'粉 藍 黃 橙',elements:'格紋 流蘇 大口袋',stockReserve:320},
+      p2:{month:'2026-08',name:'8/25檔',date:'2026-08-25',theme:'初秋層次',colorRatio:'米 藏青 橙',elements:'利落剪裁 大口袋',stockReserve:280}
+    },
+    items:{}
+  }};
+  var pcts=[0.11,0.10,0.07,0.09,0.08,0.07,0.07];
+  var PRICE={'T恤':40,'襯衫':55,'打底':30,'背心':35,'衛衣':60,'針織衫':60,'防曬衫':45,'西裝':120,'外套':110,'馬甲':70,'開衫':75,'風衣':130,'牛仔褲':95,'西裝褲':85,'休閒褲':70,'短褲':50,'半裙':60,'連衣裙':120,'套裝':140};
+  var VENDORS=['PANDA','群秀','新輝'];
+  var list=[
+    ['p1','TW1001','T恤','白',180],['p1','TW1002','T恤','黃',90],['p1','TW1003','襯衫','米',120],
+    ['p1','TW1004','背心','粉',80],['p1','TW1005','針織衫','藍',100],['p1','TW1006','防曬衫','白',150],
+    ['p1','TW1007','西裝','黑',70],['p1','TW1008','外套','米',90],['p1','TW1009','馬甲','橙',60],
+    ['p1','TW1010','牛仔褲','藏青',200],['p1','TW1011','西裝褲','黑',110],['p1','TW1012','半裙','粉',85],
+    ['p1','TW1013','連衣裙','黃',95],
+    ['p2','TW1014','T恤','灰',130],['p2','TW1015','襯衫','藍',100],['p2','TW1016','衛衣','白',140],
+    ['p2','TW1017','開衫','米',80],['p2','TW1018','風衣','藏青',75],['p2','TW1019','休閒褲','灰',95],
+    ['p2','TW1020','短褲','藍',70],['p2','TW1021','連衣裙','粉',105],['p2','TW1022','套裝','黑',65]
+  ];
+  list.forEach(function(d,idx){
+    var pid=d[0],no=d[1],cat=d[2],color=d[3],oq=d[4];
+    var group='';cfg.categories.forEach(function(g){if(g.items.indexOf(cat)>=0)group=g.name;});
+    var splits= idx%2===0 ? [['F',1]] : [['S',0.3],['M',0.4],['L',0.3]];
+    var rows=splits.map(function(sp){
+      var so=Math.round(oq*sp[1]);
+      var alloc={};cfg.stores.forEach(function(s,i){alloc[s]=Math.round(so*pcts[i]);});
+      return {color:color,size:sp[0],orderQty:so,alloc:alloc,web:Math.round(so*0.22),
+        colorType:cfg.baseColors.indexOf(color)>=0?'base':'accent'};
+    });
+    MOCK.allocation.items['m'+idx]={periodId:pid,styleNo:no,styleType:'C',category:cat,categoryGroup:group,
+      vendor:VENDORS[idx%3],orderDate:'2026-07-28',deliveryDate:'2026-08-05',onShelf:'',
+      freight:'鴻海',ship:'海運',pay:'貨運行轉匯',price:PRICE[cat]||50,moq:50,accessory:'',labelNote:'',notes:'',image:'',
+      measurements:[],rows:rows,createdAt:idx+1};
+  });
+}
+
+function normalizeConfig(v){
+  var c=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  ['stores','baseColors','accentColors','sizes'].forEach(function(k){if(v[k])c[k]=arr(v[k]).map(String);});
+  if(v.categories)c.categories=arr(v.categories).map(function(g){return {name:g.name||'',pct:num(g.pct),items:arr(g.items||[]).map(String)};});
+  if(v.password)c.password=v.password;
+  return c;
+}
+
+/* ---------- 啟動 ---------- */
+function init(){
+  if(DEMO){$('demoBanner').hidden=false;seedDemo();}
+  else{
+    if(typeof firebase==='undefined'){document.body.insertAdjacentHTML('afterbegin','<div class="demo-banner">無法載入 Firebase，請檢查網路後重新整理</div>');return;}
+    firebase.initializeApp(firebaseConfig);db=firebase.database();
+  }
+  wireStatic();
+  dbOn(ROOT+'/config',function(v){
+    if(!v){CONFIG=JSON.parse(JSON.stringify(DEFAULT_CONFIG));if(!DEMO)dbSet(ROOT+'/config',DEFAULT_CONFIG);}
+    else CONFIG=normalizeConfig(v);
+    checkLogin();buildFormStatic();refresh();
+  });
+  dbOn(ROOT+'/months',function(v){MONTHS=v||{};refresh();});
+  dbOn(ROOT+'/periods',function(v){PERIODS=v||{};if(!ovMonth){var ms=monthList();ovMonth=ms[0]||todayMonth();}if(CONFIG)fillPeriodSelect();refresh();});
+  dbOn(ROOT+'/items',function(v){ITEMS=v||{};refresh();});
+}
+
+function checkLogin(){
+  if(CONFIG&&CONFIG.password&&sessionStorage.getItem('vv_alloc_pw')!==CONFIG.password)$('login').hidden=false;
+  else $('login').hidden=true;
+}
+function tryLogin(){
+  if($('loginPw').value===CONFIG.password){sessionStorage.setItem('vv_alloc_pw',CONFIG.password);$('login').hidden=true;$('loginErr').hidden=true;}
+  else $('loginErr').hidden=false;
+}
+
+function switchTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.toggle('active',b.dataset.tab===t);});
+  ['overview','form','list','periods','settings'].forEach(function(p){$('page-'+p).hidden=(p!==t);});
+  refresh();
+}
+function refresh(){
+  if(!CONFIG)return;
+  if(currentTab==='overview')renderOverview();
+  else if(currentTab==='list')renderList();
+  else if(currentTab==='periods')renderPeriods();
+  else if(currentTab==='settings')renderSettings();
+}
+
+/* ---------- 靜態事件（只綁一次） ---------- */
+function wireStatic(){
+  document.querySelectorAll('.tab').forEach(function(b){b.addEventListener('click',function(){switchTab(b.dataset.tab);});});
+  $('loginBtn').addEventListener('click',tryLogin);
+  $('loginPw').addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
+  $('detailTbl').addEventListener('input',onDetailEdit);
+  $('detailTbl').addEventListener('change',onDetailEdit);
+  $('detailTbl').addEventListener('click',function(e){var d=e.target.dataset.del;if(d!=null){formRows.splice(Number(d),1);renderDetail();}});
+  $('rowAdd').addEventListener('click',function(){var last=formRows[formRows.length-1];formRows.push({color:last?last.color:(CONFIG.baseColors[0]||'白'),size:last?last.size:(CONFIG.sizes[0]||'F'),orderQty:0,alloc:{},web:0});renderDetail();});
+  $('measBody').addEventListener('input',function(e){var i=e.target.dataset.mi;if(i==null)return;formMeas[Number(i)][e.target.dataset.mf]=e.target.value;});
+  $('measBody').addEventListener('click',function(e){var d=e.target.dataset.mdel;if(d!=null){formMeas.splice(Number(d),1);renderMeas();}});
+  $('measAdd').addEventListener('click',function(){formMeas.push({name:'',value:''});renderMeas();});
+  $('imgBox').addEventListener('click',function(){$('f_image').click();});
+  $('f_image').addEventListener('change',function(){var f=this.files[0];if(!f)return;compressImage(f,function(url){formImage=url;showImage();toast('圖片已壓縮');});});
+  $('imgClear').addEventListener('click',function(){formImage='';$('f_image').value='';showImage();});
+  $('saveItem').addEventListener('click',saveItem);
+  $('cancelEdit').addEventListener('click',function(){resetForm();toast('已清空表單');});
+  document.querySelectorAll('.rt-bar [data-cmd]').forEach(function(b){b.addEventListener('mousedown',function(e){e.preventDefault();$('f_notes').focus();document.execCommand(b.dataset.cmd,false,null);});});
+  document.querySelectorAll('.rt-bar [data-color]').forEach(function(b){b.addEventListener('mousedown',function(e){e.preventDefault();$('f_notes').focus();document.execCommand('foreColor',false,b.dataset.color);});});
+  $('rt_size').addEventListener('change',function(){if(this.value){$('f_notes').focus();document.execCommand('fontSize',false,this.value);this.value='';}});
+  $('rt_clear').addEventListener('mousedown',function(e){e.preventDefault();$('f_notes').focus();document.execCommand('removeFormat',false,null);});
+}
+
+/* ---------- 下單卡表單 ---------- */
+function buildFormStatic(){
+  fillPeriodSelect();fillCategorySelect();
+  if(formRows.length===0)resetForm();else{renderMeas();renderDetail();}
+}
+function fillPeriodSelect(){
+  var sel=$('f_period');if(!sel||!CONFIG)return;var cur=sel.value;
+  var html='<option value="">— 選擇檔期 —</option>';
+  monthList().forEach(function(m){
+    periodsOfMonth(m).forEach(function(pid){var p=PERIODS[pid];html+='<option value="'+pid+'">'+esc(m+'｜'+(p.name||p.date||''))+'</option>';});
+  });
+  sel.innerHTML=html;if(cur)sel.value=cur;
+}
+function fillCategorySelect(){
+  var sel=$('f_category');var cur=sel.value;
+  var html='<option value="">— 選擇品類 —</option>';
+  (CONFIG.categories||[]).forEach(function(g){
+    html+='<optgroup label="'+esc(g.name+'（'+g.pct+'%）')+'">';
+    (g.items||[]).forEach(function(it){html+='<option>'+esc(it)+'</option>';});
+    html+='</optgroup>';
+  });
+  sel.innerHTML=html;if(cur)sel.value=cur;
+}
+function colorOptions(sel){
+  var h='<optgroup label="基礎色">';
+  CONFIG.baseColors.forEach(function(c){h+='<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>';});
+  h+='</optgroup><optgroup label="彩色">';
+  CONFIG.accentColors.forEach(function(c){h+='<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>';});
+  h+='</optgroup>';
+  if(sel&&allColors().indexOf(sel)<0)h+='<option selected>'+esc(sel)+'</option>';
+  return h;
+}
+function sizeOptions(sel){
+  var h='';CONFIG.sizes.forEach(function(s){h+='<option'+(s===sel?' selected':'')+'>'+esc(s)+'</option>';});
+  if(sel&&CONFIG.sizes.indexOf(sel)<0)h+='<option selected>'+esc(sel)+'</option>';
+  return h;
+}
+function renderDetail(){
+  var h='<tr><th>顏色</th><th>尺寸</th><th style="background:var(--blue-dark)">訂購數</th>';
+  CONFIG.stores.forEach(function(s){h+='<th>'+esc(s)+'</th>';});
+  h+='<th style="background:var(--orange)">官網</th><th>已配</th><th>差異</th><th></th></tr>';
+  $('detailHead').innerHTML=h;
+  var b='';
+  formRows.forEach(function(r,i){
+    b+='<tr><td style="min-width:78px"><select data-i="'+i+'" data-f="color">'+colorOptions(r.color)+'</select></td>';
+    b+='<td style="min-width:64px"><select data-i="'+i+'" data-f="size">'+sizeOptions(r.size)+'</select></td>';
+    b+='<td><input type="number" min="0" data-i="'+i+'" data-f="orderQty" value="'+(r.orderQty||'')+'"></td>';
+    CONFIG.stores.forEach(function(s){b+='<td><input type="number" min="0" data-i="'+i+'" data-store="'+esc(s)+'" value="'+((r.alloc&&r.alloc[s])||'')+'"></td>';});
+    b+='<td><input type="number" min="0" data-i="'+i+'" data-f="web" value="'+(r.web||'')+'"></td>';
+    b+='<td id="rsum'+i+'"></td><td id="rdiff'+i+'"></td>';
+    b+='<td><button class="btn btn-ghost btn-sm" data-del="'+i+'">✕</button></td></tr>';
+  });
+  $('detailBody').innerHTML=b;
+  updateDetailTotals();
+}
+function updateDetailTotals(){
+  var storeT={},webT=0,orderT=0,allocT=0;
+  CONFIG.stores.forEach(function(s){storeT[s]=0;});
+  formRows.forEach(function(r,i){
+    var a=0;
+    CONFIG.stores.forEach(function(s){var v=num(r.alloc&&r.alloc[s]);a+=v;storeT[s]+=v;});
+    a+=num(r.web);webT+=num(r.web);orderT+=num(r.orderQty);allocT+=a;
+    var d=num(r.orderQty)-a;
+    var e1=$('rsum'+i),e2=$('rdiff'+i);
+    if(e1)e1.textContent=a;
+    if(e2){e2.textContent=d;e2.className=d===0?'diff-ok':(d<0?'diff-warn':'');}
+  });
+  var diff=orderT-allocT;
+  var f='<tr><td colspan="2">合計</td><td>'+fmt(orderT)+'</td>';
+  CONFIG.stores.forEach(function(s){f+='<td>'+fmt(storeT[s])+'</td>';});
+  f+='<td>'+fmt(webT)+'</td><td>'+fmt(allocT)+'</td><td class="'+(diff<0?'diff-warn':'')+'">'+fmt(diff)+'</td><td></td></tr>';
+  $('detailFoot').innerHTML=f;
+}
+function onDetailEdit(e){
+  var t=e.target,i=t.dataset.i;
+  if(i==null)return;
+  var r=formRows[Number(i)];if(!r)return;
+  if(t.dataset.store!=null){r.alloc=r.alloc||{};r.alloc[t.dataset.store]=num(t.value);}
+  else if(t.dataset.f==='color'||t.dataset.f==='size')r[t.dataset.f]=t.value;
+  else if(t.dataset.f)r[t.dataset.f]=num(t.value);
+  updateDetailTotals();
+}
+function renderMeas(){
+  var b='';
+  formMeas.forEach(function(m,i){
+    b+='<tr><td><input data-mi="'+i+'" data-mf="name" value="'+esc(m.name||'')+'" style="text-align:center"></td>'+
+      '<td><input data-mi="'+i+'" data-mf="value" value="'+esc(m.value||'')+'"></td>'+
+      '<td><button class="btn btn-ghost btn-sm" data-mdel="'+i+'">✕</button></td></tr>';
+  });
+  $('measBody').innerHTML=b;
+}
+function showImage(){
+  $('imgBox').innerHTML=formImage?'<img src="'+formImage+'">':'<div class="ph">點擊上傳圖片<br>（存檔前會自動壓縮）</div>';
+  $('imgClear').hidden=!formImage;
+}
+function compressImage(file,cb){
+  var img=new Image();
+  img.onload=function(){
+    var max=520,w=img.width,h=img.height;
+    if(w>=h&&w>max){h=h*max/w;w=max;}else if(h>w&&h>max){w=w*max/h;h=max;}
+    var cv=document.createElement('canvas');cv.width=Math.round(w);cv.height=Math.round(h);
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+    var q=0.72,url=cv.toDataURL('image/jpeg',q);
+    while(url.length>160000&&q>0.3){q-=0.12;url=cv.toDataURL('image/jpeg',q);}
+    cb(url);
+  };
+  img.src=URL.createObjectURL(file);
+}
+function resetForm(){
+  editItemId=null;
+  $('formTitle').innerHTML='新增下單卡 <span class="sub">採購每下一款填一張，儲存後自動彙總到總覽</span>';
+  ['f_styleNo','f_styleType','f_vendor','f_orderDate','f_deliveryDate','f_onShelf','f_freight','f_ship','f_pay','f_price','f_accessory','f_moq','f_label'].forEach(function(id){$(id).value='';});
+  $('f_notes').innerHTML='';
+  $('f_category').value='';
+  formImage='';$('f_image').value='';showImage();
+  formMeas=['肩寬','胸寬','夾口','袖長','袖口','下擺寬','全長'].map(function(n){return {name:n,value:''};});
+  formRows=[{color:(CONFIG.baseColors[0]||'白'),size:CONFIG.sizes[0]||'F',orderQty:0,alloc:{},web:0}];
+  renderMeas();renderDetail();
+}
+function saveItem(){
+  var pid=$('f_period').value,sn=$('f_styleNo').value.trim();
+  if(!pid){toast('請先選擇檔期（沒有檔期先到「檔期管理」建立）');return;}
+  if(!sn){toast('請填款號');return;}
+  if(!$('f_category').value){toast('請選品類');return;}
+  var rows=formRows.filter(function(r){return num(r.orderQty)>0||rowAllocCfg(r)>0;}).map(function(r){
+    var alloc={};CONFIG.stores.forEach(function(s){var v=num(r.alloc&&r.alloc[s]);if(v)alloc[s]=v;});
+    return {color:r.color||'',colorType:colorType(r.color),size:r.size||'',orderQty:num(r.orderQty),alloc:alloc,web:num(r.web)};
+  });
+  if(rows.length===0){toast('請至少填一列訂貨明細');return;}
+  var item={
+    periodId:pid,styleNo:sn,styleType:$('f_styleType').value.trim(),category:$('f_category').value,
+    categoryGroup:groupOf($('f_category').value),vendor:$('f_vendor').value.trim(),
+    orderDate:$('f_orderDate').value,deliveryDate:$('f_deliveryDate').value,onShelf:$('f_onShelf').value,
+    freight:$('f_freight').value.trim(),ship:$('f_ship').value.trim(),pay:$('f_pay').value.trim(),
+    price:num($('f_price').value),accessory:$('f_accessory').value.trim(),moq:num($('f_moq').value),
+    labelNote:$('f_label').value.trim(),notes:$('f_notes').innerHTML,
+    image:formImage||'',
+    measurements:formMeas.filter(function(m){return String(m.name||'').trim()||String(m.value||'').trim();}),
+    rows:rows,updatedAt:Date.now()
+  };
+  if(editItemId){item.createdAt=num(ITEMS[editItemId]&&ITEMS[editItemId].createdAt)||Date.now();dbSet(ROOT+'/items/'+editItemId,item);toast('已更新：'+sn);}
+  else{item.createdAt=Date.now();dbPush(ROOT+'/items',item);toast('已新增：'+sn);}
+  resetForm();switchTab('list');
+}
+function editItem(id){
+  var it=ITEMS[id];if(!it)return;
+  editItemId=id;switchTab('form');
+  $('formTitle').innerHTML='編輯下單卡：'+esc(it.styleNo||'');
+  $('f_period').value=it.periodId||'';
+  $('f_styleNo').value=it.styleNo||'';$('f_styleType').value=it.styleType||'';
+  $('f_category').value=it.category||'';$('f_vendor').value=it.vendor||'';
+  $('f_orderDate').value=it.orderDate||'';$('f_deliveryDate').value=it.deliveryDate||'';$('f_onShelf').value=it.onShelf||'';
+  $('f_freight').value=it.freight||'';$('f_ship').value=it.ship||'';$('f_pay').value=it.pay||'';
+  $('f_price').value=it.price||'';$('f_accessory').value=it.accessory||'';$('f_moq').value=it.moq||'';
+  $('f_label').value=it.labelNote||'';$('f_notes').innerHTML=it.notes||'';
+  formImage=it.image||'';showImage();
+  formMeas=arr(it.measurements).map(function(m){return {name:m.name||'',value:m.value||''};});
+  if(!formMeas.length)formMeas=[{name:'',value:''}];
+  formRows=arr(it.rows).map(function(r){return {color:r.color,size:r.size,orderQty:num(r.orderQty),alloc:r.alloc?JSON.parse(JSON.stringify(r.alloc)):{},web:num(r.web)};});
+  renderMeas();renderDetail();
+  window.scrollTo(0,0);
+}
+function delItem(id){
+  var it=ITEMS[id];
+  if(!confirm('刪除款號 '+((it&&it.styleNo)||'')+'？此動作無法復原'))return;
+  dbRemove(ROOT+'/items/'+id);toast('已刪除');
+}
+
+/* ---------- 總覽 ---------- */
+function renderOverview(){
+  var el=$('page-overview');
+  var ms=monthList();
+  if(!ms.length){el.innerHTML='<div class="card"><div class="empty">還沒有資料。<br>先到「檔期管理」建立檔期，再到「下單卡」填入第一款。</div></div>';return;}
+  if(ms.indexOf(ovMonth)<0)ovMonth=ms[0];
+  var pids=periodsOfMonth(ovMonth);
+  if(ovPeriod!=='all'&&pids.indexOf(ovPeriod)<0)ovPeriod='all';
+  var scopePids=ovPeriod==='all'?pids:[ovPeriod];
+  var ids=itemsOfPeriods(scopePids);
+
+  var totalOrder=0,allocT=0,webT=0,storeT={},colorPieces={},basePieces=0,accentPieces=0;
+  var totalAmt=0,reserveAmt=0,vendorStat={},sizePieces={};
+  var groupStat={};(CONFIG.categories||[]).forEach(function(g){groupStat[g.name]={styles:0,pieces:0,pct:num(g.pct)};});
+  CONFIG.stores.forEach(function(s){storeT[s]=0;});
+  ids.forEach(function(id){
+    var it=ITEMS[id];
+    var g=it.categoryGroup||groupOf(it.category)||'未分類';
+    if(!groupStat[g])groupStat[g]={styles:0,pieces:0,pct:0};
+    groupStat[g].styles++;
+    var vd=it.vendor||'未填廠商';
+    if(!vendorStat[vd])vendorStat[vd]={styles:0,pieces:0,amount:0};
+    vendorStat[vd].styles++;
+    var price=num(it.price);
+    arr(it.rows).forEach(function(r){
+      var oq=num(r.orderQty);
+      totalOrder+=oq;groupStat[g].pieces+=oq;
+      totalAmt+=oq*price;vendorStat[vd].pieces+=oq;vendorStat[vd].amount+=oq*price;
+      var sz=r.size||'未填';sizePieces[sz]=(sizePieces[sz]||0)+oq;
+      var c=r.color||'未填';
+      colorPieces[c]=(colorPieces[c]||0)+oq;
+      if(colorType(c)==='base')basePieces+=oq;else accentPieces+=oq;
+      var ra=rowAllocCfg(r);
+      reserveAmt+=(oq-ra)*price;
+      CONFIG.stores.forEach(function(s){var v=num(r.alloc&&r.alloc[s]);storeT[s]+=v;allocT+=v;});
+      webT+=num(r.web);
+    });
+  });
+  allocT+=webT;
+  var stock=0;scopePids.forEach(function(pid){stock+=num(PERIODS[pid].stockReserve);});
+  var target=num(MONTHS[ovMonth]&&MONTHS[ovMonth].target);
+  var mPieces=0;itemsOfPeriods(pids).forEach(function(id){mPieces+=itemOrderTotal(ITEMS[id]);});
+  var mPct=target>0?mPieces/target*100:0;
+
+  var html='<div class="card"><h3>檔期總覽</h3>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
+    '<select id="ov_month" class="mini-input" style="width:auto;font-weight:700">'+ms.map(function(m){return '<option'+(m===ovMonth?' selected':'')+'>'+m+'</option>';}).join('')+'</select>'+
+    '<div class="chips"><button class="chip'+(ovPeriod==='all'?' active':'')+'" data-ovp="all">整月</button>'+
+    pids.map(function(pid){var p=PERIODS[pid];return '<button class="chip'+(ovPeriod===pid?' active':'')+'" data-ovp="'+pid+'">'+esc(p.name||p.date||'')+'</button>';}).join('')+
+    '</div><button class="btn btn-ghost" id="exp_btn" style="margin-left:auto">匯出 Excel</button></div>';
+  if(ovPeriod!=='all'){var pp=PERIODS[ovPeriod];html+='<div class="hint" style="margin-top:10px">上架日 '+esc(pp.date||'—')+'｜系列主題：'+esc(pp.theme||'—')+'｜色彩占比：'+esc(pp.colorRatio||'—')+'｜系列元素：'+esc(pp.elements||'—')+'</div>';}
+  html+='</div>';
+
+  var unalloc=totalOrder-allocT;
+  html+='<div class="grid g3" style="margin-bottom:14px">'+
+    '<div class="stat"><div class="lbl">'+(ovPeriod==='all'?'本月下單總件數':'本檔期下單件數')+'</div><div class="num">'+fmt(totalOrder)+'</div><div class="note">共 '+ids.length+' 款</div></div>'+
+    '<div class="stat"><div class="lbl">月目標完成（整月）</div><div class="num'+(target>0&&mPct<100?' hl':'')+'">'+(target>0?(Math.round(mPct*10)/10)+'%':'—')+'</div><div class="bar-track" style="margin-top:6px"><div class="bar-fill'+(mPct>=100?'':' orange')+'" style="width:'+Math.min(100,mPct)+'%"></div></div><div class="note">'+fmt(mPieces)+' / '+(target>0?fmt(target):'未設定目標')+' 件</div></div>'+
+    '<div class="stat"><div class="lbl">下單總金額</div><div class="num hl">$'+fmt(Math.round(totalAmt))+'</div><div class="note">Σ 每款訂購數 × 單價</div></div>'+
+    '<div class="stat"><div class="lbl">已配 / 未配</div><div class="num">'+fmt(allocT)+'<small style="font-size:14px;color:var(--muted)"> / '+fmt(unalloc)+'</small></div><div class="note">'+(unalloc<0?'<span class="diff-warn">配貨超過訂購量！</span>':'未配＝已下單但未分到店/官網')+'</div></div>'+
+    '<div class="stat"><div class="lbl">備貨庫存（實際留倉）</div><div class="num">'+fmt(unalloc)+'</div><div class="note">目標 '+fmt(stock)+' 件｜'+(unalloc-stock===0?'剛好達標':(unalloc-stock>0?'比目標多 '+fmt(unalloc-stock)+' 件':'<span class="diff-warn">比目標少 '+fmt(stock-unalloc)+' 件</span>'))+'</div></div>'+
+    '<div class="stat"><div class="lbl">備貨金額（自動算）</div><div class="num hl">$'+fmt(Math.round(reserveAmt))+'</div><div class="note">Σ 留倉件數（訂購−已配）× 單價</div></div>'+
+    '</div>';
+
+  var maxStore=1;CONFIG.stores.forEach(function(s){if(storeT[s]>maxStore)maxStore=storeT[s];});if(webT>maxStore)maxStore=webT;
+  html+='<div class="card"><h3>配貨量分布 <span class="sub">各門市＋官網（件）</span></h3>';
+  CONFIG.stores.forEach(function(s){
+    html+='<div class="bar-row"><div class="bl">'+esc(s)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+(storeT[s]/maxStore*100)+'%"></div></div><div class="bv">'+fmt(storeT[s])+' <small>'+(allocT>0?Math.round(storeT[s]/allocT*100)+'%':'')+'</small></div></div>';
+  });
+  html+='<div class="bar-row"><div class="bl">官網</div><div class="bar-track"><div class="bar-fill orange" style="width:'+(webT/maxStore*100)+'%"></div></div><div class="bv">'+fmt(webT)+' <small>'+(allocT>0?Math.round(webT/allocT*100)+'%':'')+'</small></div></div>';
+  if(allocT===0)html+='<div class="hint">尚無配貨資料</div>';
+  html+='</div>';
+
+  html+='<div class="grid g2">';
+  html+='<div class="card" style="margin-bottom:0"><h3>顏色分布 <span class="sub">依訂購件數</span></h3>';
+  if(totalOrder>0){
+    var basePct=Math.round(basePieces/totalOrder*100);
+    html+='<div style="display:flex;height:18px;border-radius:8px;overflow:hidden;margin-bottom:6px"><div style="background:var(--blue);width:'+basePct+'%"></div><div style="background:var(--orange);flex:1"></div></div>';
+    html+='<div class="hint" style="margin-bottom:12px">■ 基礎色 '+fmt(basePieces)+' 件（'+basePct+'%）　■ 彩色 '+fmt(accentPieces)+' 件（'+(100-basePct)+'%）</div>';
+    var colorKeys=Object.keys(colorPieces).sort(function(a,b){return colorPieces[b]-colorPieces[a];});
+    var maxColor=1;colorKeys.forEach(function(c){if(colorPieces[c]>maxColor)maxColor=colorPieces[c];});
+    colorKeys.forEach(function(c){
+      html+='<div class="bar-row"><div class="bl"><span class="swatch" style="background:'+swatchOf(c)+'"></span>'+esc(c)+'</div><div class="bar-track"><div class="bar-fill'+(colorType(c)==='accent'?' orange':'')+'" style="width:'+(colorPieces[c]/maxColor*100)+'%"></div></div><div class="bv">'+fmt(colorPieces[c])+' <small>'+Math.round(colorPieces[c]/totalOrder*100)+'%</small></div></div>';
+    });
+  }else html+='<div class="hint">尚無資料</div>';
+  html+='</div>';
+
+  html+='<div class="card" style="margin-bottom:0"><h3>分類占比 <span class="sub">款數占比 vs 貨盤目標</span></h3>';
+  var totalStyles=ids.length;
+  Object.keys(groupStat).forEach(function(g){
+    var st=groupStat[g];
+    if(st.styles===0&&st.pct===0)return;
+    var actual=totalStyles>0?st.styles/totalStyles*100:0;
+    html+='<div class="bar-row" style="grid-template-columns:70px 1fr 150px"><div class="bl">'+esc(g)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.min(100,actual)+'%"></div></div><div class="bv">'+(Math.round(actual*10)/10)+'% <small>目標'+st.pct+'%｜'+st.styles+'款 '+fmt(st.pieces)+'件</small></div></div>';
+  });
+  if(totalStyles===0)html+='<div class="hint">尚無資料</div>';
+  html+='</div></div>';
+
+  html+='<div class="grid g2" style="margin-top:14px">';
+  html+='<div class="card" style="margin-bottom:0"><h3>廠商彙總 <span class="sub">本範圍下單統計</span></h3>';
+  var vKeys=Object.keys(vendorStat).sort(function(a,b){return vendorStat[b].amount-vendorStat[a].amount;});
+  if(vKeys.length){
+    html+='<div class="tscroll"><table class="tbl"><thead><tr><th>廠商</th><th>款數</th><th>件數</th><th>金額</th><th>金額占比</th></tr></thead><tbody>';
+    vKeys.forEach(function(v){
+      var s=vendorStat[v];
+      html+='<tr><td>'+esc(v)+'</td><td>'+s.styles+'</td><td>'+fmt(s.pieces)+'</td><td>$'+fmt(Math.round(s.amount))+'</td><td>'+(totalAmt>0?Math.round(s.amount/totalAmt*100)+'%':'—')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  }else html+='<div class="hint">尚無資料</div>';
+  html+='</div>';
+
+  html+='<div class="card" style="margin-bottom:0"><h3>尺寸分布 <span class="sub">依訂購件數</span></h3>';
+  var sizeKeys=CONFIG.sizes.filter(function(s){return sizePieces[s];}).concat(Object.keys(sizePieces).filter(function(s){return CONFIG.sizes.indexOf(s)<0;}));
+  if(sizeKeys.length){
+    var maxSize=1;sizeKeys.forEach(function(s){if(sizePieces[s]>maxSize)maxSize=sizePieces[s];});
+    sizeKeys.forEach(function(s){
+      html+='<div class="bar-row"><div class="bl">'+esc(s)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+(sizePieces[s]/maxSize*100)+'%"></div></div><div class="bv">'+fmt(sizePieces[s])+' <small>'+(totalOrder>0?Math.round(sizePieces[s]/totalOrder*100)+'%':'')+'</small></div></div>';
+    });
+  }else html+='<div class="hint">尚無資料</div>';
+  html+='</div></div>';
+
+  if(ovPeriod==='all'&&pids.length){
+    html+='<div class="card" style="margin-top:14px"><h3>本月各檔期</h3><div class="tscroll"><table class="tbl"><thead><tr><th>檔期</th><th>上架日</th><th>款數</th><th>下單件數</th><th>下單金額</th><th>已配件數</th><th>備貨目標</th><th>實際留倉</th><th>備貨金額(自動)</th></tr></thead><tbody>';
+    pids.forEach(function(pid){
+      var p=PERIODS[pid];var pi=itemsOfPeriods([pid]);
+      var oq=0,aq=0,amt=0,rsAmt=0;
+      pi.forEach(function(id){var it=ITEMS[id];var pr=num(it.price);arr(it.rows).forEach(function(r){var o=num(r.orderQty);var ra=rowAllocCfg(r);oq+=o;aq+=ra;amt+=o*pr;rsAmt+=(o-ra)*pr;});});
+      html+='<tr><td>'+esc(p.name||'')+'</td><td>'+esc(p.date||'')+'</td><td>'+pi.length+'</td><td>'+fmt(oq)+'</td><td>$'+fmt(Math.round(amt))+'</td><td>'+fmt(aq)+'</td><td>'+fmt(num(p.stockReserve))+'</td><td>$'+fmt(Math.round(rsAmt))+'</td></tr>';
+    });
+    html+='</tbody></table></div></div>';
+  }
+  el.innerHTML=html;
+  $('ov_month').addEventListener('change',function(){ovMonth=this.value;ovPeriod='all';renderOverview();});
+  $('exp_btn').addEventListener('click',exportExcel);
+  el.querySelectorAll('[data-ovp]').forEach(function(b){b.addEventListener('click',function(){ovPeriod=b.dataset.ovp;renderOverview();});});
+}
+
+/* ---------- 款式列表 ---------- */
+var _lsTm;
+function renderList(){
+  var el=$('page-list');
+  var ms=monthList();
+  var html='<div class="card"><h3>款式列表</h3><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">';
+  html+='<select id="l_month" class="mini-input" style="width:auto"><option value="all">全部月份</option>'+ms.map(function(m){return '<option'+(listMonth===m?' selected':'')+' value="'+m+'">'+m+'</option>';}).join('')+'</select>';
+  var pids=listMonth==='all'?Object.keys(PERIODS):periodsOfMonth(listMonth);
+  html+='<select id="l_period" class="mini-input" style="width:auto"><option value="all">全部檔期</option>'+pids.map(function(pid){var p=PERIODS[pid];return '<option'+(listPeriod===pid?' selected':'')+' value="'+pid+'">'+esc((p.month||'')+'｜'+(p.name||''))+'</option>';}).join('')+'</select>';
+  html+='<input id="l_search" class="mini-input" style="width:160px" placeholder="搜尋款號 / 廠商" value="'+esc(listSearch)+'">';
+  html+='</div>';
+  var ids=Object.keys(ITEMS).filter(function(id){
+    var it=ITEMS[id];var p=PERIODS[it.periodId]||{};
+    if(listMonth!=='all'&&p.month!==listMonth)return false;
+    if(listPeriod!=='all'&&it.periodId!==listPeriod)return false;
+    if(listSearch){var q=listSearch.toLowerCase();if(String(it.styleNo||'').toLowerCase().indexOf(q)<0&&String(it.vendor||'').toLowerCase().indexOf(q)<0)return false;}
+    return true;
+  }).sort(function(a,b){return num(ITEMS[b].createdAt)-num(ITEMS[a].createdAt);});
+  if(!ids.length)html+='<div class="empty">沒有符合的款式</div>';
+  else{
+    html+='<div class="item-grid">';
+    ids.forEach(function(id){
+      var it=ITEMS[id],p=PERIODS[it.periodId]||{};
+      var ot=itemOrderTotal(it),at=itemAllocTotalCfg(it),d=ot-at;
+      html+='<div class="item-card"><div class="thumb">'+(it.image?'<img src="'+it.image+'">':'<div class="noimg">無圖片</div>')+'</div>'+
+        '<div class="ib"><div class="sn">'+esc(it.styleNo||'')+'　<span class="badge badge-blue">'+esc(it.category||'')+'</span></div>'+
+        '<div class="meta">'+esc((p.month||'')+'｜'+(p.name||''))+'　'+esc(it.vendor||'')+'<br>訂購 <b>'+fmt(ot)+'</b>｜已配 <b>'+fmt(at)+'</b>　'+
+        (d===0?'<span class="badge badge-blue">已配平</span>':'<span class="badge badge-orange">'+(d>0?'留倉 '+fmt(d):'配超 '+fmt(-d))+'</span>')+
+        '</div></div>'+
+        '<div class="foot"><button class="btn btn-ghost btn-sm" data-edit="'+id+'">編輯</button><button class="btn btn-ghost btn-sm" data-sheet="'+id+'" style="color:var(--blue-dark)">下單單</button><button class="btn btn-ghost btn-sm" data-delitem="'+id+'" style="color:var(--danger)">刪除</button></div></div>';
+    });
+    html+='</div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+  $('l_month').addEventListener('change',function(){listMonth=this.value;listPeriod='all';renderList();});
+  $('l_period').addEventListener('change',function(){listPeriod=this.value;renderList();});
+  $('l_search').addEventListener('input',function(){listSearch=this.value;clearTimeout(_lsTm);_lsTm=setTimeout(function(){renderList();var s=$('l_search');s.focus();s.setSelectionRange(s.value.length,s.value.length);},350);});
+  el.querySelectorAll('[data-edit]').forEach(function(b){b.addEventListener('click',function(){editItem(b.dataset.edit);});});
+  el.querySelectorAll('[data-delitem]').forEach(function(b){b.addEventListener('click',function(){delItem(b.dataset.delitem);});});
+  el.querySelectorAll('[data-sheet]').forEach(function(b){b.addEventListener('click',function(){openSheet(b.dataset.sheet);});});
+}
+
+/* ---------- 檔期管理 ---------- */
+function renderPeriods(){
+  var el=$('page-periods');
+  var html='<div class="card"><h3 id="pFormTitle">'+(editPeriodId?'編輯檔期':'新增檔期')+'</h3><div class="form-grid">'+
+    '<div class="fld"><label>月份 *</label><input id="p_month" type="month"></div>'+
+    '<div class="fld"><label>檔期名稱 *</label><input id="p_name" placeholder="例：8/25檔"></div>'+
+    '<div class="fld"><label>上架日期</label><input id="p_date" type="date"></div>'+
+    '<div class="fld"><label>備貨目標（手動填）</label><input id="p_stock" type="number" min="0" placeholder="件數"></div>'+
+    '<div class="fld"><label>系列主題</label><input id="p_theme"></div>'+
+    '<div class="fld"><label>色彩占比</label><input id="p_colorRatio" placeholder="例：粉 藍 黃 橙"></div>'+
+    '<div class="fld"><label>系列元素</label><input id="p_elements" placeholder="例：格紋 流蘇 大口袋"></div>'+
+    '<div class="fld" style="display:flex;align-items:flex-end;gap:6px"><button class="btn btn-primary" id="p_add" style="flex:1">'+(editPeriodId?'更新檔期':'＋ 建立檔期')+'</button>'+(editPeriodId?'<button class="btn btn-ghost" id="p_cancel">取消</button>':'')+'</div>'+
+    '</div></div>';
+  var ms=monthList();
+  if(!ms.length)html+='<div class="card"><div class="empty">還沒有任何檔期，先在上面建立一個</div></div>';
+  ms.forEach(function(m){
+    var pids=periodsOfMonth(m);
+    var target=num(MONTHS[m]&&MONTHS[m].target);
+    var mPieces=0;itemsOfPeriods(pids).forEach(function(id){mPieces+=itemOrderTotal(ITEMS[id]);});
+    var pct=target>0?Math.round(mPieces/target*1000)/10:null;
+    html+='<div class="card month-card"><div class="mth"><div class="mname">'+m+'</div>'+
+      '<div>月下單目標 <input class="mini-input" data-mtarget="'+m+'" value="'+(target||'')+'"> 件</div>'+
+      '<div>已下單 <b style="color:var(--orange)">'+fmt(mPieces)+'</b> 件'+(pct!=null?'（'+pct+'%）':'')+'</div></div>';
+    pids.forEach(function(pid){
+      var p=PERIODS[pid];
+      var pi=itemsOfPeriods([pid]);var pieces=0,aq=0;
+      pi.forEach(function(id){pieces+=itemOrderTotal(ITEMS[id]);aq+=itemAllocTotalCfg(ITEMS[id]);});
+      html+='<div class="pd-row"><div><div class="pn">'+esc(p.name||'')+'　<span class="hint">'+esc(p.date||'')+'</span></div>'+
+        '<div class="pm">主題：'+esc(p.theme||'—')+'｜色彩：'+esc(p.colorRatio||'—')+'｜元素：'+esc(p.elements||'—')+'<br>款數 '+pi.length+'｜下單 '+fmt(pieces)+' 件｜備貨目標 <input class="mini-input" data-pstock="'+pid+'" value="'+(p.stockReserve||'')+'"> 件｜實際留倉 <b>'+fmt(pieces-aq)+'</b> 件</div></div>'+
+        '<div style="display:flex;flex-direction:column;gap:6px"><button class="btn btn-ghost btn-sm" data-pedit="'+pid+'">編輯</button><button class="btn btn-ghost btn-sm" data-pdel="'+pid+'" style="color:var(--danger)">刪除</button></div></div>';
+    });
+    html+='</div>';
+  });
+  el.innerHTML=html;
+  if(editPeriodId&&PERIODS[editPeriodId]){
+    var p=PERIODS[editPeriodId];
+    $('p_month').value=p.month||todayMonth();$('p_name').value=p.name||'';$('p_date').value=p.date||'';
+    $('p_stock').value=p.stockReserve||'';$('p_theme').value=p.theme||'';$('p_colorRatio').value=p.colorRatio||'';$('p_elements').value=p.elements||'';
+    $('p_cancel').addEventListener('click',function(){editPeriodId=null;renderPeriods();});
+  }else{$('p_month').value=todayMonth();}
+  $('p_add').addEventListener('click',function(){
+    var m=$('p_month').value,n=$('p_name').value.trim();
+    if(!m||!n){toast('請填月份與檔期名稱');return;}
+    var data={month:m,name:n,date:$('p_date').value,theme:$('p_theme').value.trim(),colorRatio:$('p_colorRatio').value.trim(),elements:$('p_elements').value.trim(),stockReserve:num($('p_stock').value)};
+    var needMonth=!MONTHS[m];
+    if(editPeriodId){dbUpdate(ROOT+'/periods/'+editPeriodId,data);toast('已更新檔期');editPeriodId=null;}
+    else{data.createdAt=Date.now();dbPush(ROOT+'/periods',data);toast('已建立檔期：'+n);}
+    if(needMonth)dbSet(ROOT+'/months/'+m,{target:0});
+    renderPeriods();
+  });
+  el.querySelectorAll('[data-mtarget]').forEach(function(inp){inp.addEventListener('change',function(){dbSet(ROOT+'/months/'+inp.dataset.mtarget+'/target',num(inp.value));toast('已更新月目標');});});
+  el.querySelectorAll('[data-pstock]').forEach(function(inp){inp.addEventListener('change',function(){dbSet(ROOT+'/periods/'+inp.dataset.pstock+'/stockReserve',num(inp.value));toast('已更新備貨目標');});});
+  el.querySelectorAll('[data-pdel]').forEach(function(b){b.addEventListener('click',function(){
+    var pid=b.dataset.pdel;var used=itemsOfPeriods([pid]).length;
+    if(used>0){alert('此檔期底下還有 '+used+' 款，請先刪除或把款式改掛其他檔期');return;}
+    if(confirm('刪除檔期「'+(PERIODS[pid].name||'')+'」？')){dbRemove(ROOT+'/periods/'+pid);toast('已刪除');}
+  });});
+  el.querySelectorAll('[data-pedit]').forEach(function(b){b.addEventListener('click',function(){editPeriodId=b.dataset.pedit;renderPeriods();window.scrollTo(0,0);});});
+}
+
+/* ---------- 設定 ---------- */
+function renderSettings(){
+  var el=$('page-settings');
+  function tagList(list,key){return list.map(function(v,i){return '<span class="tag-x">'+esc(v)+'<b data-rm="'+key+'" data-idx="'+i+'">✕</b></span>';}).join('')||'<span class="hint">（空）</span>';}
+  var html='<div class="card"><h3>門市管理 <span class="sub">新開門市在這裡加，下單卡與總覽會自動多一欄；移除門市不會刪除歷史資料</span></h3>'+
+    '<div>'+tagList(CONFIG.stores,'stores')+'</div><div class="inline-add"><input id="add_stores" placeholder="門市名稱"><button class="btn btn-primary btn-sm" data-add="stores">加入</button></div></div>';
+  html+='<div class="card"><h3>顏色管理</h3><div class="sec-title">基礎色</div><div>'+tagList(CONFIG.baseColors,'baseColors')+'</div><div class="inline-add"><input id="add_baseColors" placeholder="顏色名"><button class="btn btn-primary btn-sm" data-add="baseColors">加入</button></div>'+
+    '<div class="sec-title">彩色</div><div>'+tagList(CONFIG.accentColors,'accentColors')+'</div><div class="inline-add"><input id="add_accentColors" placeholder="顏色名"><button class="btn btn-primary btn-sm" data-add="accentColors">加入</button></div></div>';
+  html+='<div class="card"><h3>尺寸管理</h3><div>'+tagList(CONFIG.sizes,'sizes')+'</div><div class="inline-add"><input id="add_sizes" placeholder="例：XXL"><button class="btn btn-primary btn-sm" data-add="sizes">加入</button></div></div>';
+  html+='<div class="card"><h3>品類管理 <span class="sub">目標％供總覽對照用</span></h3>';
+  (CONFIG.categories||[]).forEach(function(g,gi){
+    html+='<div class="sec-title">'+esc(g.name)+'　目標 <input class="mini-input" style="width:56px" data-gpct="'+gi+'" value="'+g.pct+'"> %</div>'+
+      '<div>'+g.items.map(function(it,ii){return '<span class="tag-x">'+esc(it)+'<b data-catrm="'+gi+'" data-idx="'+ii+'">✕</b></span>';}).join('')+'</div>'+
+      '<div class="inline-add"><input id="add_cat'+gi+'" placeholder="品類名"><button class="btn btn-primary btn-sm" data-catadd="'+gi+'">加入</button></div>';
+  });
+  html+='</div>';
+  html+='<div class="card"><h3>密碼保護</h3><div class="inline-add"><input id="set_pw" type="text" style="width:180px" placeholder="'+(CONFIG.password?'已設定，輸入新密碼可更換':'未設定，輸入以啟用')+'"><button class="btn btn-primary btn-sm" id="pw_save">儲存密碼</button><button class="btn btn-ghost btn-sm" id="pw_clear">取消密碼</button></div><p class="hint">設定後開啟工具需輸入密碼（同一分頁只需輸入一次）。</p></div>';
+  el.innerHTML=html;
+  function saveCfg(){var c=JSON.parse(JSON.stringify(CONFIG));dbSet(ROOT+'/config',c);}
+  el.querySelectorAll('[data-add]').forEach(function(b){b.addEventListener('click',function(){var k=b.dataset.add;var v=$('add_'+k).value.trim();if(!v)return;if(CONFIG[k].indexOf(v)>=0){toast('已存在');return;}CONFIG[k].push(v);saveCfg();toast('已加入 '+v);});});
+  el.querySelectorAll('[data-rm]').forEach(function(b){b.addEventListener('click',function(){var k=b.dataset.rm;if(!confirm('移除「'+CONFIG[k][b.dataset.idx]+'」？'))return;CONFIG[k].splice(Number(b.dataset.idx),1);saveCfg();});});
+  el.querySelectorAll('[data-catadd]').forEach(function(b){b.addEventListener('click',function(){var gi=Number(b.dataset.catadd);var v=$('add_cat'+gi).value.trim();if(!v)return;CONFIG.categories[gi].items.push(v);saveCfg();toast('已加入 '+v);});});
+  el.querySelectorAll('[data-catrm]').forEach(function(b){b.addEventListener('click',function(){var gi=Number(b.dataset.catrm);if(!confirm('移除？'))return;CONFIG.categories[gi].items.splice(Number(b.dataset.idx),1);saveCfg();});});
+  el.querySelectorAll('[data-gpct]').forEach(function(inp){inp.addEventListener('change',function(){CONFIG.categories[Number(inp.dataset.gpct)].pct=num(inp.value);saveCfg();toast('已更新目標％');});});
+  $('pw_save').addEventListener('click',function(){var v=$('set_pw').value.trim();if(!v){toast('請輸入密碼');return;}CONFIG.password=v;saveCfg();sessionStorage.setItem('vv_alloc_pw',v);toast('密碼已更新');});
+  $('pw_clear').addEventListener('click',function(){if(!confirm('確定取消密碼保護？'))return;delete CONFIG.password;dbSet(ROOT+'/config',JSON.parse(JSON.stringify(CONFIG)));sessionStorage.removeItem('vv_alloc_pw');toast('已取消密碼');});
+}
+
+
+/* ---------- 廠商版下單單 ---------- */
+var sheetItemId=null;
+function openSheet(id){
+  var it=ITEMS[id];if(!it)return;
+  sheetItemId=id;
+  var p=PERIODS[it.periodId]||{};
+  var h='<div class="sh-title">台灣群秀下單明細</div>';
+  h+='<div class="sh-sub">'+esc((p.month||'')+'｜'+(p.name||''))+'　產單日 '+new Date().toLocaleDateString('zh-TW')+'</div>';
+  h+='<table class="sh-tbl"><tr>'+
+    '<td class="lbl">款號</td><td style="font-weight:800;font-size:15px">'+esc(it.styleNo||'')+'</td>'+
+    '<td class="lbl">款別</td><td>'+esc(it.styleType||'')+'</td>'+
+    '<td class="lbl">品類</td><td>'+esc(it.category||'')+'</td>'+
+    '<td class="lbl">廠商</td><td>'+esc(it.vendor||'')+'</td></tr>'+
+    '<tr><td class="lbl">下單日期</td><td>'+esc(it.orderDate||'')+'</td>'+
+    '<td class="lbl">交貨日期</td><td style="font-weight:800;color:var(--orange)">'+esc(it.deliveryDate||'')+'</td>'+
+    '<td class="lbl">預計上架日</td><td>'+esc(it.onShelf||'')+'</td>'+
+    '<td class="lbl">MOQ</td><td>'+(it.moq||'')+'</td></tr>'+
+    '<tr><td class="lbl">貨運行</td><td>'+esc(it.freight||'')+'</td>'+
+    '<td class="lbl">運輸方式</td><td>'+esc(it.ship||'')+'</td>'+
+    '<td class="lbl">付款方式</td><td>'+esc(it.pay||'')+'</td>'+
+    '<td class="lbl">價格</td><td>'+(it.price||'')+'</td></tr>'+
+    '<tr><td class="lbl">輔料</td><td>'+esc(it.accessory||'')+'</td>'+
+    '<td class="lbl">領標</td><td colspan="5">'+esc(it.labelNote||'')+'</td></tr></table>';
+  h+='<div class="sh-2col">';
+  h+='<div class="sh-imgbox">'+(it.image?'<img src="'+it.image+'">':'<span style="color:var(--muted);font-size:12px">無款式圖片</span>')+'</div>';
+  h+='<div class="sh-notes"><div class="nt">備註</div>'+(it.notes||'<span style=\'color:var(--muted)\'>—</span>')+'</div>';
+  h+='</div>';
+  var meas=arr(it.measurements);
+  if(meas.length){
+    h+='<table class="sh-tbl" style="max-width:420px"><tr><th colspan="2">訂貨尺寸（cm）</th></tr>';
+    meas.forEach(function(m){h+='<tr><td class="lbl">'+esc(m.name||'')+'</td><td>'+esc(m.value||'')+'</td></tr>';});
+    h+='</table>';
+  }
+  var rows=arr(it.rows);var tq=0;
+  h+='<table class="sh-tbl" style="max-width:420px"><tr><th>顏色</th><th>尺寸</th><th>數量</th></tr>';
+  rows.forEach(function(r){tq+=num(r.orderQty);h+='<tr><td>'+esc(r.color||'')+'</td><td>'+esc(r.size||'')+'</td><td style="font-weight:700">'+fmt(num(r.orderQty))+'</td></tr>';});
+  h+='<tr><td class="lbl" colspan="2">合計</td><td style="font-weight:800">'+fmt(tq)+'</td></tr></table>';
+  h+='<div class="sh-foot">※ 大貨可接受的尺寸誤差須小於 ±2cm<br>※ 棉麻需先水洗防縮水處理後才可交貨<br>※ 出貨時間若有變動請提前 3 日以上通知</div>';
+  $('sheetBody').innerHTML=h;
+  $('sheetModal').hidden=false;
+}
+function wireSheet(){
+  $('sheetClose').addEventListener('click',function(){$('sheetModal').hidden=true;});
+  $('sheetModal').addEventListener('click',function(e){if(e.target===this)this.hidden=true;});
+  $('sheetPrint').addEventListener('click',function(){window.print();});
+  $('sheetJpg').addEventListener('click',function(){
+    if(typeof html2canvas==='undefined'){toast('圖片元件載入失敗，請檢查網路後重新整理');return;}
+    var it=ITEMS[sheetItemId]||{};
+    toast('產生圖片中…');
+    html2canvas($('sheetBody'),{scale:2,backgroundColor:'#ffffff',useCORS:true}).then(function(cv){
+      var a=document.createElement('a');
+      a.href=cv.toDataURL('image/jpeg',0.92);
+      a.download='下單單_'+(it.styleNo||'item')+'.jpg';
+      document.body.appendChild(a);a.click();a.remove();
+      toast('已下載 JPG，可直接傳給廠商');
+    });
+  });
+}
+
+/* ---------- Excel 匯出 ---------- */
+function exportExcel(){
+  if(typeof XLSX==='undefined'){toast('Excel 元件載入失敗，請檢查網路後重新整理');return;}
+  var pids=ovPeriod==='all'?periodsOfMonth(ovMonth):[ovPeriod];
+  var ids=itemsOfPeriods(pids);
+  if(!ids.length){toast('目前範圍沒有款式資料');return;}
+  var scopeName=ovMonth+(ovPeriod==='all'?'_整月':'_'+(((PERIODS[ovPeriod]||{}).name)||'檔期'));
+
+  var s1=[['檔期','上架日','款數','下單件數','下單金額','已配件數','備貨目標','實際留倉','備貨金額']];
+  pids.forEach(function(pid){
+    var p=PERIODS[pid];var pi=itemsOfPeriods([pid]);
+    var oq=0,aq=0,amt=0,rsAmt=0;
+    pi.forEach(function(id){var it=ITEMS[id];var pr=num(it.price);arr(it.rows).forEach(function(r){var o=num(r.orderQty);var ra=rowAllocCfg(r);oq+=o;aq+=ra;amt+=o*pr;rsAmt+=(o-ra)*pr;});});
+    s1.push([p.name||'',p.date||'',pi.length,oq,Math.round(amt),aq,num(p.stockReserve),oq-aq,Math.round(rsAmt)]);
+  });
+
+  var s2=[['檔期','款號','款別','品類','大類','廠商','單價','訂購件數','已配件數','留倉件數','下單金額','下單日期','交貨日期','預計上架日','貨運行','運輸方式','付款方式','MOQ','輔料','領標']];
+  ids.forEach(function(id){
+    var it=ITEMS[id];var p=PERIODS[it.periodId]||{};
+    var ot=itemOrderTotal(it),at=itemAllocTotalCfg(it);
+    s2.push([p.name||'',it.styleNo||'',it.styleType||'',it.category||'',it.categoryGroup||'',it.vendor||'',num(it.price),ot,at,ot-at,Math.round(ot*num(it.price)),it.orderDate||'',it.deliveryDate||'',it.onShelf||'',it.freight||'',it.ship||'',it.pay||'',num(it.moq)||'',it.accessory||'',it.labelNote||'']);
+  });
+
+  var h3=['檔期','款號','顏色','尺寸','訂購數'].concat(CONFIG.stores).concat(['官網','已配','留倉']);
+  var s3=[h3];
+  ids.forEach(function(id){
+    var it=ITEMS[id];var p=PERIODS[it.periodId]||{};
+    arr(it.rows).forEach(function(r){
+      var row=[p.name||'',it.styleNo||'',r.color||'',r.size||'',num(r.orderQty)];
+      CONFIG.stores.forEach(function(s){row.push(num(r.alloc&&r.alloc[s]));});
+      var ra=rowAllocCfg(r);
+      row.push(num(r.web),ra,num(r.orderQty)-ra);
+      s3.push(row);
+    });
+  });
+
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s1),'檔期摘要');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s2),'款式清單');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s3),'配貨明細');
+  XLSX.writeFile(wb,'採購配貨_'+scopeName+'.xlsx');
+  toast('已匯出 Excel');
+}
+
+wireSheet();
+init();
+</script>
+</body>
+</html>
