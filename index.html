@@ -173,6 +173,7 @@ hidden,[hidden]{display:none !important}
       <button class="tab" data-tab="periods">檔期管理</button>
       <button class="tab" data-tab="settings">設定</button>
     </nav>
+    <div id="userBox" class="hint" style="margin-left:auto;display:flex;align-items:center;gap:8px" hidden><span id="userEmail"></span><button class="btn btn-ghost btn-sm" id="logoutBtn">登出</button></div>
   </div>
 </header>
 <main class="wrap">
@@ -265,10 +266,12 @@ hidden,[hidden]{display:none !important}
 <div id="login" hidden>
   <div class="login-box">
     <h2>VV DOUBLE 採購配貨中心</h2>
-    <p>請輸入密碼</p>
-    <input id="loginPw" type="password" placeholder="密碼">
-    <button class="btn btn-primary" id="loginBtn" style="width:100%">進入</button>
-    <p id="loginErr" style="color:var(--danger);margin-top:10px" hidden>密碼錯誤</p>
+    <p>請用 Email 登入</p>
+    <input id="loginEmail" type="email" placeholder="Email" autocomplete="username">
+    <input id="loginPw" type="password" placeholder="密碼" autocomplete="current-password">
+    <button class="btn btn-primary" id="loginBtn" style="width:100%">登入</button>
+    <p id="loginErr" style="color:var(--danger);margin-top:10px" hidden></p>
+    <p class="hint" style="margin-top:12px;cursor:pointer;text-decoration:underline" id="forgotPw">忘記密碼（寄重設信到 Email）</p>
   </div>
 </div>
 <div id="hoverPreview" hidden><img id="hoverPreviewImg" alt=""></div>
@@ -287,6 +290,7 @@ hidden,[hidden]{display:none !important}
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </content>
@@ -325,7 +329,8 @@ var DEFAULT_CONFIG = {
 };
 var SWATCH = {'白':'#FFFFFF','米':'#F1E7D3','黑':'#26282E','藏青':'#1F3A5F','灰':'#9AA0A6','黃':'#F4C430','橙':'#ED7D31','藍':'#4472C4','粉':'#F4A7B9','紅':'#C0392B','綠':'#3E8E5A','咖':'#8B5E3C','卡其':'#BDB08C','軍綠':'#5B6E4F','酒紅':'#7B2D3B','杏':'#EAD9C2','深藍':'#27408B','淺藍':'#A8C6E8'};
 
-var db=null, CONFIG=null, MONTHS={}, PERIODS={}, ITEMS={};
+var db=null, auth=null, CONFIG=null, MONTHS={}, PERIODS={}, ITEMS={}, ROLES={};
+var USER=null, ROLE=null, dataStarted=false;
 var currentTab='overview';
 var ovMonth=null, ovPeriod='all';
 var listMonth='all', listPeriod='all', listSearch='';
@@ -341,6 +346,8 @@ function fmt(n){return num(n).toLocaleString('zh-Hant');}
 function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._tm);t._tm=setTimeout(function(){t.classList.remove('show');},2200);}
 function todayMonth(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function swatchOf(c){return SWATCH[c]||'#CBD3E0';}
+function emailKey(e){return String(e||'').toLowerCase().replace(/\./g,',');}
+function isAdmin(){return ROLE==='admin';}
 function arr(v){if(Array.isArray(v))return v.filter(function(x){return x!=null;});if(v&&typeof v==='object')return Object.keys(v).sort().map(function(k){return v[k];}).filter(function(x){return x!=null;});return [];}
 function allColors(){return (CONFIG.baseColors||[]).concat(CONFIG.accentColors||[]);}
 function colorType(c){return (CONFIG.baseColors||[]).indexOf(c)>=0?'base':'accent';}
@@ -421,29 +428,46 @@ function normalizeConfig(v){
 
 /* ---------- 啟動 ---------- */
 function init(){
-  if(DEMO){$('demoBanner').hidden=false;seedDemo();}
-  else{
-    if(typeof firebase==='undefined'){document.body.insertAdjacentHTML('afterbegin','<div class="demo-banner">無法載入 Firebase，請檢查網路後重新整理</div>');return;}
-    firebase.initializeApp(firebaseConfig);db=firebase.database();
-  }
   wireStatic();
+  if(DEMO){
+    $('demoBanner').hidden=false;seedDemo();
+    ROLE=/[?&]role=staff/.test(location.search)?'staff':'admin';
+    startData();return;
+  }
+  if(typeof firebase==='undefined'){document.body.insertAdjacentHTML('afterbegin','<div class="demo-banner">無法載入 Firebase，請檢查網路後重新整理</div>');return;}
+  firebase.initializeApp(firebaseConfig);
+  db=firebase.database();auth=firebase.auth();
+  auth.onAuthStateChanged(function(u){
+    if(!u){USER=null;ROLE=null;$('login').hidden=false;$('userBox').hidden=true;return;}
+    USER=u;
+    db.ref(ROOT+'/roles/'+emailKey(u.email)).once('value').then(function(s){
+      var r=s.val();
+      if(!r||!r.role){var e2=$('loginErr');e2.textContent='此帳號尚未授權，請聯絡主管開通';e2.hidden=false;auth.signOut();return;}
+      ROLE=r.role;
+      $('login').hidden=true;$('userBox').hidden=false;
+      $('userEmail').textContent=(r.name?r.name+'｜':'')+u.email+(ROLE==='admin'?'（主管）':'（一般）');
+      startData();
+    }).catch(function(){var e3=$('loginErr');e3.textContent='讀取權限失敗，請重新整理';e3.hidden=false;});
+  });
+}
+function startData(){
+  if(dataStarted){refresh();return;}
+  dataStarted=true;
   dbOn(ROOT+'/config',function(v){
     if(!v){CONFIG=JSON.parse(JSON.stringify(DEFAULT_CONFIG));if(!DEMO)dbSet(ROOT+'/config',DEFAULT_CONFIG);}
     else CONFIG=normalizeConfig(v);
-    checkLogin();buildFormStatic();refresh();
+    buildFormStatic();refresh();
   });
   dbOn(ROOT+'/months',function(v){MONTHS=v||{};refresh();});
   dbOn(ROOT+'/periods',function(v){PERIODS=v||{};if(!ovMonth){var ms=monthList();ovMonth=ms[0]||todayMonth();}if(CONFIG)fillPeriodSelect();refresh();});
   dbOn(ROOT+'/items',function(v){ITEMS=v||{};refresh();});
+  dbOn(ROOT+'/roles',function(v){ROLES=v||{};if(currentTab==='settings')refresh();});
 }
-
-function checkLogin(){
-  if(CONFIG&&CONFIG.password&&sessionStorage.getItem('vv_alloc_pw')!==CONFIG.password)$('login').hidden=false;
-  else $('login').hidden=true;
-}
-function tryLogin(){
-  if($('loginPw').value===CONFIG.password){sessionStorage.setItem('vv_alloc_pw',CONFIG.password);$('login').hidden=true;$('loginErr').hidden=true;}
-  else $('loginErr').hidden=false;
+function doLogin(){
+  var em=$('loginEmail').value.trim(),pw=$('loginPw').value;
+  if(!em||!pw){$('loginErr').textContent='請輸入 Email 與密碼';$('loginErr').hidden=false;return;}
+  $('loginErr').hidden=true;
+  auth.signInWithEmailAndPassword(em,pw).catch(function(){$('loginErr').textContent='登入失敗：帳號或密碼錯誤';$('loginErr').hidden=false;});
 }
 
 var tabHistory=[];
@@ -470,8 +494,15 @@ function wireStatic(){
   $('backBtn').addEventListener('click',goBack);
   $('lightbox').addEventListener('click',function(){this.hidden=true;});
   $('formSheet').addEventListener('click',function(){var item=collectFormItem();if(!item.styleNo){toast('請先填款號再預覽');return;}openSheetFromData(item);});
-  $('loginBtn').addEventListener('click',tryLogin);
-  $('loginPw').addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
+  $('loginBtn').addEventListener('click',doLogin);
+  $('loginPw').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+  $('logoutBtn').addEventListener('click',function(){if(auth)auth.signOut();location.reload();});
+  $('forgotPw').addEventListener('click',function(){
+    var em=$('loginEmail').value.trim();
+    var e4=$('loginErr');
+    if(!em){e4.textContent='請先在 Email 欄填入信箱，再點忘記密碼';e4.hidden=false;return;}
+    auth.sendPasswordResetEmail(em).then(function(){e4.textContent='重設信已寄出，請到信箱收信設定新密碼';e4.hidden=false;}).catch(function(e){e4.textContent='寄送失敗：'+(e&&e.message||'');e4.hidden=false;});
+  });
   $('detailTbl').addEventListener('input',onDetailEdit);
   $('detailTbl').addEventListener('change',onDetailEdit);
   $('detailTbl').addEventListener('click',function(e){var d=e.target.dataset.del;if(d!=null){formRows.splice(Number(d),1);renderDetail();}});
@@ -795,7 +826,7 @@ function renderOverview(){
     '<select id="ov_month" class="mini-input" style="width:auto;font-weight:700">'+ms.map(function(m){return '<option'+(m===ovMonth?' selected':'')+'>'+m+'</option>';}).join('')+'</select>'+
     '<div class="chips"><button class="chip'+(ovPeriod==='all'?' active':'')+'" data-ovp="all">整月</button>'+
     pids.map(function(pid){var p=PERIODS[pid];return '<button class="chip'+(ovPeriod===pid?' active':'')+'" data-ovp="'+pid+'">'+esc(p.name||p.date||'')+'</button>';}).join('')+
-    '</div><button class="btn btn-ghost" id="exp_btn" style="margin-left:auto">匯出 Excel</button></div>';
+    '</div>'+(isAdmin()?'<button class="btn btn-ghost" id="exp_btn" style="margin-left:auto">匯出 Excel</button>':'')+'</div>';
   if(ovPeriod!=='all'){var pp=PERIODS[ovPeriod];html+='<div class="hint" style="margin-top:10px">上架日 '+esc(pp.date||'—')+'｜系列主題：'+esc(pp.theme||'—')+'｜色彩占比：'+esc(pp.colorRatio||'—')+'｜系列元素：'+esc(pp.elements||'—')+'</div>';}
   html+='</div>';
 
@@ -803,16 +834,17 @@ function renderOverview(){
   html+='<div class="grid g3" style="margin-bottom:14px">'+
     '<div class="stat"><div class="lbl">'+(ovPeriod==='all'?'本月下單總件數':'本檔期下單件數')+'</div><div class="num">'+fmt(totalOrder)+'</div><div class="note">共 '+ids.length+' 款</div></div>'+
     '<div class="stat"><div class="lbl">月目標完成（整月）</div><div class="num'+(target>0&&mPct<100?' hl':'')+'">'+(target>0?(Math.round(mPct*10)/10)+'%':'—')+'</div><div class="bar-track" style="margin-top:6px"><div class="bar-fill'+(mPct>=100?'':' orange')+'" style="width:'+Math.min(100,mPct)+'%"></div></div><div class="note">'+fmt(mPieces)+' / '+(target>0?fmt(target):'未設定目標')+' 件</div></div>'+
-    '<div class="stat"><div class="lbl">下單總金額</div><div class="num hl">$'+fmt(Math.round(totalAmt))+'</div><div class="note">Σ 每款訂購數 × 單價</div></div>'+
+    (isAdmin()?'<div class="stat"><div class="lbl">下單總金額</div><div class="num hl">$'+fmt(Math.round(totalAmt))+'</div><div class="note">Σ 每款訂購數 × 單價</div></div>':'')+
     '<div class="stat"><div class="lbl">已配 / 未配</div><div class="num">'+fmt(allocT)+'<small style="font-size:14px;color:var(--muted)"> / '+fmt(unalloc)+'</small></div><div class="note">'+(unalloc<0?'<span class="diff-warn">配貨超過訂購量！</span>':'未配＝已下單但未分到店/官網')+'</div></div>'+
-    '<div class="stat" style="grid-column:span 2"><div class="lbl">官網 : 門市（七間）配貨佔比</div>'+
+    (isAdmin()?'<div class="stat" style="grid-column:span 2"><div class="lbl">官網 : 門市（七間）配貨佔比</div>'+
     (allocT>0
       ?'<div class="num"><span class="hl">'+Math.round(webT/allocT*100)+'%</span><small style="font-size:15px;color:var(--muted)"> 官網</small>　'+(100-Math.round(webT/allocT*100))+'%<small style="font-size:15px;color:var(--muted)"> 門市</small></div>'+
        '<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:6px"><div style="background:var(--orange);width:'+(webT/allocT*100)+'%"></div><div style="background:var(--blue);flex:1"></div></div>'
       :'<div class="num">—</div>')+
-    '<div class="note">官網 '+fmt(webT)+' 件｜門市合計 '+fmt(allocT-webT)+' 件</div></div>'+
+    '<div class="note">官網 '+fmt(webT)+' 件｜門市合計 '+fmt(allocT-webT)+' 件</div></div>':'')+
     '</div>';
 
+  if(isAdmin()){
   var maxStore=1;CONFIG.stores.forEach(function(s){if(storeT[s]>maxStore)maxStore=storeT[s];});if(webT>maxStore)maxStore=webT;
   html+='<div class="card"><h3>配貨量分布 <span class="sub">各門市＋官網（件）</span></h3>';
   CONFIG.stores.forEach(function(s){
@@ -821,6 +853,7 @@ function renderOverview(){
   html+='<div class="bar-row"><div class="bl">官網</div><div class="bar-track"><div class="bar-fill orange" style="width:'+(webT/maxStore*100)+'%"></div></div><div class="bv">'+fmt(webT)+' <small>'+(allocT>0?Math.round(webT/allocT*100)+'%':'')+'</small></div></div>';
   if(allocT===0)html+='<div class="hint">尚無配貨資料</div>';
   html+='</div>';
+  }
 
   html+='<div class="grid g2">';
   html+='<div class="card" style="margin-bottom:0"><h3>顏色分布 <span class="sub">依訂購件數</span></h3>';
@@ -848,6 +881,7 @@ function renderOverview(){
   html+='</div></div>';
 
   html+='<div class="grid g2" style="margin-top:14px">';
+  if(isAdmin()){
   html+='<div class="card" style="margin-bottom:0"><h3>廠商彙總 <span class="sub">本範圍下單統計</span></h3>';
   var vKeys=Object.keys(vendorStat).sort(function(a,b){return vendorStat[b].amount-vendorStat[a].amount;});
   if(vKeys.length){
@@ -860,6 +894,7 @@ function renderOverview(){
   }else html+='<div class="hint">尚無資料</div>';
   html+='</div>';
 
+  }
   html+='<div class="card" style="margin-bottom:0"><h3>尺寸分布 <span class="sub">依訂購件數</span></h3>';
   var sizeKeys=CONFIG.sizes.filter(function(s){return sizePieces[s];}).concat(Object.keys(sizePieces).filter(function(s){return CONFIG.sizes.indexOf(s)<0;}));
   if(sizeKeys.length){
@@ -870,7 +905,7 @@ function renderOverview(){
   }else html+='<div class="hint">尚無資料</div>';
   html+='</div></div>';
 
-  if(ovPeriod==='all'&&pids.length){
+  if(isAdmin()&&ovPeriod==='all'&&pids.length){
     html+='<div class="card" style="margin-top:14px"><h3>本月各檔期</h3><div class="tscroll"><table class="tbl"><thead><tr><th>檔期</th><th>上架日</th><th>款數</th><th>下單件數</th><th>下單金額</th><th>已配件數</th><th>官網配貨</th><th>官網佔比</th></tr></thead><tbody>';
     pids.forEach(function(pid){
       var p=PERIODS[pid];var pi=itemsOfPeriods([pid]);
@@ -882,7 +917,7 @@ function renderOverview(){
   }
   el.innerHTML=html;
   $('ov_month').addEventListener('change',function(){ovMonth=this.value;ovPeriod='all';renderOverview();});
-  $('exp_btn').addEventListener('click',exportExcel);
+  var eb=$('exp_btn');if(eb)eb.addEventListener('click',exportExcel);
   el.querySelectorAll('[data-ovp]').forEach(function(b){b.addEventListener('click',function(){ovPeriod=b.dataset.ovp;renderOverview();});});
 }
 
@@ -925,7 +960,7 @@ function renderList(){
         '<div class="meta">'+esc((p.month||'')+'｜'+(p.name||''))+'　'+esc(it.vendor||'')+'<br>訂購 <b>'+fmt(ot)+'</b>｜已配 <b>'+fmt(at)+'</b>　'+
         (d===0?'<span class="badge badge-blue">已配平</span>':'<span class="badge badge-orange">'+(d>0?'留倉 '+fmt(d):'配超 '+fmt(-d))+'</span>')+
         '</div></div>'+
-        '<div class="foot"><button class="btn btn-ghost btn-sm" data-edit="'+id+'">編輯</button><button class="btn btn-ghost btn-sm" data-sheet="'+id+'" style="color:var(--blue-dark)">下單單</button><button class="btn btn-ghost btn-sm" data-delitem="'+id+'" style="color:var(--danger)">刪除</button></div></div>';
+        '<div class="foot"><button class="btn btn-ghost btn-sm" data-edit="'+id+'">編輯</button><button class="btn btn-ghost btn-sm" data-sheet="'+id+'" style="color:var(--blue-dark)">下單單</button>'+(isAdmin()?'<button class="btn btn-ghost btn-sm" data-delitem="'+id+'" style="color:var(--danger)">刪除</button>':'')+'</div></div>';
     });
     html+='</div>';
   }
@@ -948,7 +983,7 @@ function renderList(){
 /* ---------- 檔期管理 ---------- */
 function renderPeriods(){
   var el=$('page-periods');
-  var html='<div class="card"><h3 id="pFormTitle">'+(editPeriodId?'編輯檔期':'新增檔期')+'</h3><div class="form-grid">'+
+  var html=!isAdmin()?'':'<div class="card"><h3 id="pFormTitle">'+(editPeriodId?'編輯檔期':'新增檔期')+'</h3><div class="form-grid">'+
     '<div class="fld"><label>月份 *</label><input id="p_month" type="month"></div>'+
     '<div class="fld"><label>檔期名稱 *</label><input id="p_name" placeholder="例：8/25檔"></div>'+
     '<div class="fld"><label>上架日期</label><input id="p_date" type="date"></div>'+
@@ -965,7 +1000,7 @@ function renderPeriods(){
     var mPieces=0;itemsOfPeriods(pids).forEach(function(id){mPieces+=itemOrderTotal(ITEMS[id]);});
     var pct=target>0?Math.round(mPieces/target*1000)/10:null;
     html+='<div class="card month-card"><div class="mth"><div class="mname">'+m+'</div>'+
-      '<div>月下單目標 <input class="mini-input" data-mtarget="'+m+'" value="'+(target||'')+'"> 件</div>'+
+      (isAdmin()?'<div>月下單目標 <input class="mini-input" data-mtarget="'+m+'" value="'+(target||'')+'"> 件</div>':'<div>月下單目標 '+(target?fmt(target):'未設定')+' 件</div>')+
       '<div>已下單 <b style="color:var(--orange)">'+fmt(mPieces)+'</b> 件'+(pct!=null?'（'+pct+'%）':'')+'</div></div>';
     pids.forEach(function(pid){
       var p=PERIODS[pid];
@@ -973,18 +1008,18 @@ function renderPeriods(){
       pi.forEach(function(id){pieces+=itemOrderTotal(ITEMS[id]);aq+=itemAllocTotalCfg(ITEMS[id]);arr(ITEMS[id].rows).forEach(function(r){wq+=num(r.web);});});
       html+='<div class="pd-row"><div><div class="pn">'+esc(p.name||'')+'　<span class="hint">'+esc(p.date||'')+'</span></div>'+
         '<div class="pm">主題：'+esc(p.theme||'—')+'｜色彩：'+esc(p.colorRatio||'—')+'｜元素：'+esc(p.elements||'—')+'<br>款數 '+pi.length+'｜下單 '+fmt(pieces)+' 件｜已配 '+fmt(aq)+' 件｜官網 <b>'+fmt(wq)+'</b> 件（'+(aq>0?Math.round(wq/aq*100)+'%':'—')+'）</div></div>'+
-        '<div style="display:flex;flex-direction:column;gap:6px"><button class="btn btn-ghost btn-sm" data-pedit="'+pid+'">編輯</button><button class="btn btn-ghost btn-sm" data-pdel="'+pid+'" style="color:var(--danger)">刪除</button></div></div>';
+        (isAdmin()?'<div style="display:flex;flex-direction:column;gap:6px"><button class="btn btn-ghost btn-sm" data-pedit="'+pid+'">編輯</button><button class="btn btn-ghost btn-sm" data-pdel="'+pid+'" style="color:var(--danger)">刪除</button></div>':'')+'</div>';
     });
     html+='</div>';
   });
   el.innerHTML=html;
-  if(editPeriodId&&PERIODS[editPeriodId]){
+  if($('p_month')&&editPeriodId&&PERIODS[editPeriodId]){
     var p=PERIODS[editPeriodId];
     $('p_month').value=p.month||todayMonth();$('p_name').value=p.name||'';$('p_date').value=p.date||'';
     $('p_theme').value=p.theme||'';$('p_colorRatio').value=p.colorRatio||'';$('p_elements').value=p.elements||'';
     $('p_cancel').addEventListener('click',function(){editPeriodId=null;renderPeriods();});
-  }else{$('p_month').value=todayMonth();}
-  $('p_add').addEventListener('click',function(){
+  }else if($('p_month')){$('p_month').value=todayMonth();}
+  if($('p_add'))$('p_add').addEventListener('click',function(){
     var m=$('p_month').value,n=$('p_name').value.trim();
     if(!m||!n){toast('請填月份與檔期名稱');return;}
     var data={month:m,name:n,date:$('p_date').value,theme:$('p_theme').value.trim(),colorRatio:$('p_colorRatio').value.trim(),elements:$('p_elements').value.trim()};
@@ -1037,6 +1072,9 @@ function listBlock(key,label,addPh){
 }
 function renderSettings(){
   var el=$('page-settings');
+  var colorCard='<div class="card"><h3>顏色管理</h3>'+listBlock('baseColors','基礎色','顏色名')+listBlock('accentColors','彩色','顏色名')+'</div>';
+  var sizeCard='<div class="card"><h3>尺寸管理</h3>'+listBlock('sizes','','例：XXL')+'</div>';
+  if(!isAdmin()){el.innerHTML=colorCard+sizeCard;return;}
   var html='<div class="card"><h3>門市管理 <span class="sub">拖曳標籤可調整順序（即下單卡與總覽的欄位順序）；✕ 是隱藏（防呆），隱藏區再按 ✕ 才是永久刪除</span></h3>'+listBlock('stores','','門市名稱')+'</div>';
   html+='<div class="card"><h3>下單卡選單選項 <span class="sub">同樣支援拖曳排序與隱藏</span></h3>'+
     listBlock('styleTypes','款別')+listBlock('vendors','廠商名稱')+listBlock('freights','貨運行')+
@@ -1048,15 +1086,44 @@ function renderSettings(){
   html+='</div>';
   if(accHid.length){html+='<div class="hint" style="margin:6px 0 2px">已隱藏（點名稱恢復；按 ✕ 才是永久刪除）</div><div>';accHid.forEach(function(a,i){html+=hiddenChip('accessories',a,i);});html+='</div>';}
   html+='<div class="inline-add"><input id="acc_name" placeholder="輔料名稱"><button class="btn btn-ghost btn-sm" id="acc_pick">選擇圖片</button><span id="acc_state" class="hint"></span><input id="acc_img" type="file" accept="image/*" hidden><button class="btn btn-primary btn-sm" id="acc_add">加入</button></div></div>';
-  html+='<div class="card"><h3>顏色管理</h3>'+listBlock('baseColors','基礎色','顏色名')+listBlock('accentColors','彩色','顏色名')+'</div>';
-  html+='<div class="card"><h3>尺寸管理</h3>'+listBlock('sizes','','例：XXL')+'</div>';
+  html+=colorCard+sizeCard;
   html+='<div class="card"><h3>品類管理 <span class="sub">目標％供總覽對照用</span></h3>';
   (CONFIG.categories||[]).forEach(function(g,gi){
     html+='<div style="display:flex;align-items:center;gap:8px;margin-top:14px"><span class="sec-title" style="margin:0">'+esc(g.name)+'</span><span> 目標 <input class="mini-input" style="width:56px" data-gpct="'+gi+'" value="'+g.pct+'"> %</span></div>'+listBlock('cat'+gi,'','品類名');
   });
   html+='</div>';
-  html+='<div class="card"><h3>密碼保護</h3><div class="inline-add"><input id="set_pw" type="text" style="width:180px" placeholder="'+(CONFIG.password?'已設定，輸入新密碼可更換':'未設定，輸入以啟用')+'"><button class="btn btn-primary btn-sm" id="pw_save">儲存密碼</button><button class="btn btn-ghost btn-sm" id="pw_clear">取消密碼</button></div><p class="hint">設定後開啟工具需輸入密碼（同一分頁只需輸入一次）。</p></div>';
+  html+='<div class="card"><h3>帳號管理 <span class="sub">建立同事的登入帳號並指定權限；移除只是取消授權，帳號本身保留</span></h3><div class="tagzone">';
+  var rkeys=Object.keys(ROLES);
+  if(rkeys.length){rkeys.forEach(function(k){var r=ROLES[k]||{};html+='<span class="tag-x" style="cursor:default">'+esc((r.name?r.name+'｜':'')+(r.email||k))+'（'+(r.role==='admin'?'主管':'一般')+'）<b data-roledel="'+esc(k)+'">✕</b></span>';});}
+  else html+='<span class="hint">（尚無帳號）</span>';
+  html+='</div><div class="inline-add" style="flex-wrap:wrap">'+
+    '<input id="ac_name" placeholder="名字" style="width:90px">'+
+    '<input id="ac_email" placeholder="Email" style="width:200px">'+
+    '<input id="ac_pw" placeholder="初始密碼（至少6碼）" style="width:150px">'+
+    '<select id="ac_role" class="mini-input" style="width:auto"><option value="staff">一般</option><option value="admin">主管</option></select>'+
+    '<button class="btn btn-primary btn-sm" id="ac_add">建立帳號</button></div>'+
+    '<p class="hint">對方第一次登入用 Email＋初始密碼，之後可在登入頁點「忘記密碼」自行改密碼。</p></div>';
   el.innerHTML=html;
+}
+function createAccount(){
+  if(DEMO){toast('示範模式不能建立帳號');return;}
+  var nm=$('ac_name').value.trim(),em=$('ac_email').value.trim(),pw=$('ac_pw').value,role=$('ac_role').value;
+  if(!em||em.indexOf('@')<0){toast('請填正確 Email');return;}
+  if(!pw||pw.length<6){toast('初始密碼至少 6 碼');return;}
+  function writeRole(){
+    dbSet(ROOT+'/roles/'+emailKey(em),{email:em,role:role,name:nm||''});
+    $('ac_name').value='';$('ac_email').value='';$('ac_pw').value='';
+    toast('已建立並授權：'+em);
+  }
+  var sec=firebase.initializeApp(firebaseConfig,'sec'+Date.now());
+  sec.auth().createUserWithEmailAndPassword(em,pw)
+    .then(function(){return sec.auth().signOut();})
+    .then(function(){try{sec.delete();}catch(x){}writeRole();})
+    .catch(function(e){
+      try{sec.delete();}catch(x){}
+      if(e&&e.code==='auth/email-already-in-use'){writeRole();toast('帳號已存在，已直接授權');}
+      else toast('建立失敗：'+(e&&e.message||''));
+    });
 }
 function wireSettingsStatic(){
   var root=$('page-settings');
@@ -1091,8 +1158,13 @@ function wireSettingsStatic(){
       CONFIG.accessories.push({name:nm,image:pendingAccImg||''});
       pendingAccImg='';saveCfgAll();toast('已加入 '+nm);return;
     }
-    if(t.id==='pw_save'){var pv=$('set_pw').value.trim();if(!pv){toast('請輸入密碼');return;}CONFIG.password=pv;saveCfgAll();sessionStorage.setItem('vv_alloc_pw',pv);toast('密碼已更新');return;}
-    if(t.id==='pw_clear'){if(!confirm('確定取消密碼保護？'))return;delete CONFIG.password;saveCfgAll();sessionStorage.removeItem('vv_alloc_pw');toast('已取消密碼');return;}
+    if(t.id==='ac_add'){createAccount();return;}
+    if(t.dataset&&t.dataset.roledel!=null){
+      var rk=t.dataset.roledel;var rr=ROLES[rk]||{};
+      if(USER&&rr.email&&emailKey(USER.email)===emailKey(rr.email)){toast('不能移除自己的授權');return;}
+      if(!confirm('取消「'+(rr.name||rr.email||rk)+'」的登入授權？'))return;
+      dbRemove(ROOT+'/roles/'+rk);toast('已取消授權');return;
+    }
   });
   root.addEventListener('change',function(e){
     var t=e.target;
@@ -1188,6 +1260,7 @@ function wireSheet(){
 
 /* ---------- Excel 匯出 ---------- */
 function exportExcel(){
+  if(!isAdmin()){toast('僅主管可匯出');return;}
   if(typeof XLSX==='undefined'){toast('Excel 元件載入失敗，請檢查網路後重新整理');return;}
   var pids=ovPeriod==='all'?periodsOfMonth(ovMonth):[ovPeriod];
   var ids=itemsOfPeriods(pids);
