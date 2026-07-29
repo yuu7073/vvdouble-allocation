@@ -139,6 +139,8 @@ a{color:var(--blue)}
   .sheet-actions{display:none !important}
   #sheetBody{border:none}
 }
+#lightbox{position:fixed;inset:0;background:rgba(20,26,40,.85);z-index:180;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:20px}
+#lightbox img{max-width:94vw;max-height:92vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.5);background:#fff}
 hidden,[hidden]{display:none !important}
 </style>
 </head>
@@ -147,6 +149,7 @@ hidden,[hidden]{display:none !important}
 <header>
   <div class="hin">
     <div class="hbrand">VV <span>DOUBLE</span>｜採購配貨中心</div>
+    <button class="tab" id="backBtn" hidden>&larr; 回上一頁</button>
     <nav class="tabs">
       <button class="tab active" data-tab="overview">總覽</button>
       <button class="tab" data-tab="form">下單卡</button>
@@ -225,6 +228,7 @@ hidden,[hidden]{display:none !important}
 
       <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn btn-primary" id="saveItem">儲存下單卡</button>
+        <button class="btn btn-ghost" id="formSheet">預覽 / 匯出下單單</button>
         <button class="btn btn-ghost" id="cancelEdit">取消 / 清空</button>
       </div>
     </div>
@@ -244,6 +248,7 @@ hidden,[hidden]{display:none !important}
     <p id="loginErr" style="color:var(--danger);margin-top:10px" hidden>密碼錯誤</p>
   </div>
 </div>
+<div id="lightbox" hidden><img id="lightboxImg" alt=""></div>
 <div id="sheetModal" hidden>
   <div class="sheet-panel">
     <div class="sheet-actions">
@@ -401,12 +406,16 @@ function tryLogin(){
   else $('loginErr').hidden=false;
 }
 
-function switchTab(t){
+var tabHistory=[];
+function switchTab(t,noPush){
+  if(!noPush&&t!==currentTab){tabHistory.push(currentTab);if(tabHistory.length>20)tabHistory.shift();}
   currentTab=t;
-  document.querySelectorAll('.tab').forEach(function(b){b.classList.toggle('active',b.dataset.tab===t);});
+  document.querySelectorAll('.tab').forEach(function(b){if(b.dataset.tab)b.classList.toggle('active',b.dataset.tab===t);});
   ['overview','form','list','periods','settings'].forEach(function(p){$('page-'+p).hidden=(p!==t);});
+  $('backBtn').hidden=tabHistory.length===0;
   refresh();
 }
+function goBack(){var prev=tabHistory.pop();if(prev!=null)switchTab(prev,true);$('backBtn').hidden=tabHistory.length===0;}
 function refresh(){
   if(!CONFIG)return;
   if(currentTab==='overview')renderOverview();
@@ -417,7 +426,10 @@ function refresh(){
 
 /* ---------- 靜態事件（只綁一次） ---------- */
 function wireStatic(){
-  document.querySelectorAll('.tab').forEach(function(b){b.addEventListener('click',function(){switchTab(b.dataset.tab);});});
+  document.querySelectorAll('.tab').forEach(function(b){if(b.dataset.tab)b.addEventListener('click',function(){switchTab(b.dataset.tab);});});
+  $('backBtn').addEventListener('click',goBack);
+  $('lightbox').addEventListener('click',function(){this.hidden=true;});
+  $('formSheet').addEventListener('click',function(){var item=collectFormItem();if(!item.styleNo){toast('請先填款號再預覽');return;}openSheetFromData(item);});
   $('loginBtn').addEventListener('click',tryLogin);
   $('loginPw').addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
   $('detailTbl').addEventListener('input',onDetailEdit);
@@ -536,12 +548,12 @@ function showImage(){
 function compressImage(file,cb){
   var img=new Image();
   img.onload=function(){
-    var max=520,w=img.width,h=img.height;
+    var max=900,w=img.width,h=img.height;
     if(w>=h&&w>max){h=h*max/w;w=max;}else if(h>w&&h>max){w=w*max/h;h=max;}
     var cv=document.createElement('canvas');cv.width=Math.round(w);cv.height=Math.round(h);
     cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-    var q=0.72,url=cv.toDataURL('image/jpeg',q);
-    while(url.length>160000&&q>0.3){q-=0.12;url=cv.toDataURL('image/jpeg',q);}
+    var q=0.8,url=cv.toDataURL('image/jpeg',q);
+    while(url.length>260000&&q>0.3){q-=0.12;url=cv.toDataURL('image/jpeg',q);}
     cb(url);
   };
   img.src=URL.createObjectURL(file);
@@ -557,19 +569,14 @@ function resetForm(){
   formRows=[{color:(CONFIG.baseColors[0]||'白'),size:CONFIG.sizes[0]||'F',orderQty:0,alloc:{},web:0}];
   renderMeas();renderDetail();
 }
-function saveItem(){
-  var pid=$('f_period').value,sn=$('f_styleNo').value.trim();
-  if(!pid){toast('請先選擇檔期（沒有檔期先到「檔期管理」建立）');return;}
-  if(!sn){toast('請填款號');return;}
-  if(!$('f_category').value){toast('請選品類');return;}
+function collectFormItem(){
   var rows=formRows.filter(function(r){return num(r.orderQty)>0||rowAllocCfg(r)>0;}).map(function(r){
     var alloc={};CONFIG.stores.forEach(function(s){var v=num(r.alloc&&r.alloc[s]);if(v)alloc[s]=v;});
     return {color:r.color||'',colorType:colorType(r.color),size:r.size||'',orderQty:num(r.orderQty),alloc:alloc,web:num(r.web)};
   });
-  if(rows.length===0){toast('請至少填一列訂貨明細');return;}
-  var item={
-    periodId:pid,styleNo:sn,styleType:$('f_styleType').value.trim(),category:$('f_category').value,
-    categoryGroup:groupOf($('f_category').value),vendor:$('f_vendor').value.trim(),
+  return {
+    periodId:$('f_period').value,styleNo:$('f_styleNo').value.trim(),styleType:$('f_styleType').value.trim(),
+    category:$('f_category').value,categoryGroup:groupOf($('f_category').value),vendor:$('f_vendor').value.trim(),
     orderDate:$('f_orderDate').value,deliveryDate:$('f_deliveryDate').value,onShelf:$('f_onShelf').value,
     freight:$('f_freight').value.trim(),ship:$('f_ship').value.trim(),pay:$('f_pay').value.trim(),
     price:num($('f_price').value),accessory:$('f_accessory').value.trim(),moq:num($('f_moq').value),
@@ -578,8 +585,15 @@ function saveItem(){
     measurements:formMeas.filter(function(m){return String(m.name||'').trim()||String(m.value||'').trim();}),
     rows:rows,updatedAt:Date.now()
   };
-  if(editItemId){item.createdAt=num(ITEMS[editItemId]&&ITEMS[editItemId].createdAt)||Date.now();dbSet(ROOT+'/items/'+editItemId,item);toast('已更新：'+sn);}
-  else{item.createdAt=Date.now();dbPush(ROOT+'/items',item);toast('已新增：'+sn);}
+}
+function saveItem(){
+  var item=collectFormItem();
+  if(!item.periodId){toast('請先選擇檔期（沒有檔期先到「檔期管理」建立）');return;}
+  if(!item.styleNo){toast('請填款號');return;}
+  if(!item.category){toast('請選品類');return;}
+  if(item.rows.length===0){toast('請至少填一列訂貨明細');return;}
+  if(editItemId){item.createdAt=num(ITEMS[editItemId]&&ITEMS[editItemId].createdAt)||Date.now();dbSet(ROOT+'/items/'+editItemId,item);toast('已更新：'+item.styleNo);}
+  else{item.createdAt=Date.now();dbPush(ROOT+'/items',item);toast('已新增：'+item.styleNo);}
   resetForm();switchTab('list');
 }
 function editItem(id){
@@ -766,7 +780,7 @@ function renderList(){
     ids.forEach(function(id){
       var it=ITEMS[id],p=PERIODS[it.periodId]||{};
       var ot=itemOrderTotal(it),at=itemAllocTotalCfg(it),d=ot-at;
-      html+='<div class="item-card"><div class="thumb">'+(it.image?'<img src="'+it.image+'">':'<div class="noimg">無圖片</div>')+'</div>'+
+      html+='<div class="item-card"><div class="thumb">'+(it.image?'<img src="'+it.image+'" style="cursor:zoom-in" title="點擊放大">':'<div class="noimg">無圖片</div>')+'</div>'+
         '<div class="ib"><div class="sn">'+esc(it.styleNo||'')+'　<span class="badge badge-blue">'+esc(it.category||'')+'</span></div>'+
         '<div class="meta">'+esc((p.month||'')+'｜'+(p.name||''))+'　'+esc(it.vendor||'')+'<br>訂購 <b>'+fmt(ot)+'</b>｜已配 <b>'+fmt(at)+'</b>　'+
         (d===0?'<span class="badge badge-blue">已配平</span>':'<span class="badge badge-orange">'+(d>0?'留倉 '+fmt(d):'配超 '+fmt(-d))+'</span>')+
@@ -783,6 +797,7 @@ function renderList(){
   el.querySelectorAll('[data-edit]').forEach(function(b){b.addEventListener('click',function(){editItem(b.dataset.edit);});});
   el.querySelectorAll('[data-delitem]').forEach(function(b){b.addEventListener('click',function(){delItem(b.dataset.delitem);});});
   el.querySelectorAll('[data-sheet]').forEach(function(b){b.addEventListener('click',function(){openSheet(b.dataset.sheet);});});
+  el.querySelectorAll('.thumb img').forEach(function(im){im.addEventListener('click',function(){$('lightboxImg').src=im.src;$('lightbox').hidden=false;});});
 }
 
 /* ---------- 檔期管理 ---------- */
@@ -875,10 +890,10 @@ function renderSettings(){
 
 
 /* ---------- 廠商版下單單 ---------- */
-var sheetItemId=null;
-function openSheet(id){
-  var it=ITEMS[id];if(!it)return;
-  sheetItemId=id;
+var sheetItem=null;
+function openSheet(id){var it=ITEMS[id];if(!it)return;openSheetFromData(it);}
+function openSheetFromData(it){
+  sheetItem=it;
   var p=PERIODS[it.periodId]||{};
   var h='<div class="sh-title">台灣群秀下單明細</div>';
   h+='<div class="sh-sub">'+esc((p.month||'')+'｜'+(p.name||''))+'　產單日 '+new Date().toLocaleDateString('zh-TW')+'</div>';
@@ -921,7 +936,7 @@ function wireSheet(){
   $('sheetPrint').addEventListener('click',function(){window.print();});
   $('sheetJpg').addEventListener('click',function(){
     if(typeof html2canvas==='undefined'){toast('圖片元件載入失敗，請檢查網路後重新整理');return;}
-    var it=ITEMS[sheetItemId]||{};
+    var it=sheetItem||{};
     toast('產生圖片中…');
     html2canvas($('sheetBody'),{scale:2,backgroundColor:'#ffffff',useCORS:true}).then(function(cv){
       var a=document.createElement('a');
