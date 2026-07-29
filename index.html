@@ -131,6 +131,9 @@ a{color:var(--blue)}
 .sh-imgbox img{max-width:100%;max-height:260px}
 .sh-notes{border:1px solid #B9C4DA;padding:10px 12px;font-size:13px;line-height:1.8;min-height:220px}
 .sh-notes .nt{font-size:12px;font-weight:800;color:var(--blue-dark);margin-bottom:6px}
+.sh-key{border-collapse:collapse;margin:0 0 14px;width:100%;max-width:440px}
+.sh-key td{border:2px solid #111;padding:8px 14px;font-size:19px;font-weight:900;color:#111;text-align:center;letter-spacing:1px}
+.sh-key td.k{width:46%}
 .sh-foot{margin-top:12px;font-size:12px;color:var(--ink);line-height:1.9;border-top:2px solid var(--blue);padding-top:8px}
 @media print{
   body>*{display:none !important}
@@ -186,7 +189,9 @@ hidden,[hidden]{display:none !important}
         <div class="fld"><label>品類 *</label><select id="f_category"></select></div>
         <div class="fld"><label>廠商名稱</label><select id="f_vendor"></select></div>
         <div class="fld"><label>下單日期</label><input id="f_orderDate" type="date"></div>
-        <div class="fld"><label>交貨日期</label><input id="f_deliveryDate" type="date"></div>
+        <div class="fld"><label>交大貨日期</label><input id="f_deliveryDate" type="date"></div>
+        <div class="fld"><label>交拍樣日期</label><input id="f_sampleDate" type="date"></div>
+        <div class="fld"><label>做貨天數</label><input id="f_prodDays" placeholder="例：5-6天"></div>
         <div class="fld"><label>預計上架日</label><select id="f_onShelfSel"></select><input id="f_onShelf" type="date" style="margin-top:6px" hidden></div>
         <div class="fld"><label>貨運行</label><select id="f_freight"></select></div>
         <div class="fld"><label>運輸方式</label><input id="f_ship" list="shipList" placeholder="例：海運"><datalist id="shipList"><option value="海運"><option value="空運"><option value="快遞"></datalist></div>
@@ -670,7 +675,7 @@ function compressImage(file,cb,maxSide){
 function resetForm(){
   editItemId=null;
   $('formTitle').innerHTML='新增下單卡 <span class="sub">採購每下一款填一張，儲存後自動彙總到總覽</span>';
-  ['f_styleNo','f_styleType','f_vendor','f_orderDate','f_deliveryDate','f_onShelf','f_freight','f_ship','f_price','f_accessory','f_moq','f_label','f_tag'].forEach(function(id){$(id).value='';});
+  ['f_styleNo','f_styleType','f_vendor','f_orderDate','f_deliveryDate','f_sampleDate','f_prodDays','f_onShelf','f_freight','f_ship','f_price','f_accessory','f_moq','f_label','f_tag'].forEach(function(id){$(id).value='';});
   $('f_pay').value='貨運行轉匯';
   $('f_category').value='';
   $('f_notes').innerHTML='';
@@ -690,6 +695,7 @@ function collectFormItem(){
     periodId:$('f_period').value,styleNo:$('f_styleNo').value.trim(),styleType:$('f_styleType').value.trim(),
     category:$('f_category').value,categoryGroup:groupOf($('f_category').value),vendor:$('f_vendor').value.trim(),
     orderDate:$('f_orderDate').value,deliveryDate:$('f_deliveryDate').value,
+    sampleDate:$('f_sampleDate').value,prodDays:$('f_prodDays').value.trim(),
     onShelf:($('f_onShelfSel').value==='__other'?$('f_onShelf').value:$('f_onShelfSel').value),
     freight:$('f_freight').value.trim(),ship:$('f_ship').value.trim(),pay:$('f_pay').value.trim(),
     price:num($('f_price').value),accessory:$('f_accessory').value.trim(),moq:num($('f_moq').value),
@@ -719,6 +725,7 @@ function editItem(id){
   $('f_category').value=it.category||'';
   setSel('f_vendor',it.vendor||'');
   $('f_orderDate').value=it.orderDate||'';$('f_deliveryDate').value=it.deliveryDate||'';
+  $('f_sampleDate').value=it.sampleDate||'';$('f_prodDays').value=it.prodDays||'';
   $('f_onShelf').value=it.onShelf||'';fillOnShelfSelect();
   setSel('f_freight',it.freight||'');$('f_ship').value=it.ship||'';$('f_pay').value=it.pay||'';
   $('f_price').value=it.price||'';
@@ -1122,16 +1129,20 @@ function openSheetFromData(it){
     '<td class="lbl">品類</td><td>'+esc(it.category||'')+'</td>'+
     '<td class="lbl">廠商</td><td>'+esc(it.vendor||'')+'</td></tr>'+
     '<tr><td class="lbl">下單日期</td><td>'+esc(it.orderDate||'')+'</td>'+
-    '<td class="lbl">交貨日期</td><td style="font-weight:800;color:var(--orange)">'+esc(it.deliveryDate||'')+'</td>'+
     '<td class="lbl">預計上架日</td><td>'+esc(it.onShelf||'')+'</td>'+
+    '<td class="lbl">價格</td><td>'+(it.price||'')+'</td>'+
     '<td class="lbl">MOQ</td><td>'+(it.moq||'')+'</td></tr>'+
     '<tr><td class="lbl">貨運行</td><td>'+esc(it.freight||'')+'</td>'+
     '<td class="lbl">運輸方式</td><td>'+esc(it.ship||'')+'</td>'+
     '<td class="lbl">付款方式</td><td>'+esc(it.pay||'')+'</td>'+
-    '<td class="lbl">價格</td><td>'+(it.price||'')+'</td></tr>'+
-    '<tr><td class="lbl">輔料</td><td>'+esc(it.accessory||'')+'</td>'+
-    '<td class="lbl">領標</td><td>'+esc(it.labelNote||'')+'</td>'+
+    '<td class="lbl">輔料</td><td>'+esc(it.accessory||'')+'</td></tr>'+
+    '<tr><td class="lbl">領標</td><td colspan="3">'+esc(it.labelNote||'')+'</td>'+
     '<td class="lbl">吊牌</td><td colspan="3">'+esc(it.tag||'')+'</td></tr></table>';
+  h+='<table class="sh-key">'+
+    '<tr style="background:#FF2D2D"><td class="k">交大貨日期</td><td>'+esc(it.deliveryDate||'—')+'</td></tr>'+
+    '<tr style="background:#FFF200"><td class="k">交拍樣日期</td><td>'+esc(it.sampleDate||'—')+'</td></tr>'+
+    '<tr style="background:#FFA51F"><td class="k">做貨天數</td><td>'+esc(it.prodDays||'—')+'</td></tr>'+
+    '</table>';
   h+='<div class="sh-2col">';
   var imgs=arr(it.images);if(!imgs.length&&it.image)imgs=[it.image];
   var cimgs=arr(it.colorImages);
@@ -1189,11 +1200,11 @@ function exportExcel(){
     s1.push([p.name||'',p.date||'',pi.length,oq,Math.round(amt),aq,num(p.stockReserve),oq-aq,Math.round(rsAmt)]);
   });
 
-  var s2=[['檔期','款號','款別','品類','大類','廠商','單價','訂購件數','已配件數','留倉件數','下單金額','下單日期','交貨日期','預計上架日','貨運行','運輸方式','付款方式','MOQ','輔料','領標','吊牌']];
+  var s2=[['檔期','款號','款別','品類','大類','廠商','單價','訂購件數','已配件數','留倉件數','下單金額','下單日期','交拍樣日期','交大貨日期','做貨天數','預計上架日','貨運行','運輸方式','付款方式','MOQ','輔料','領標','吊牌']];
   ids.forEach(function(id){
     var it=ITEMS[id];var p=PERIODS[it.periodId]||{};
     var ot=itemOrderTotal(it),at=itemAllocTotalCfg(it);
-    s2.push([p.name||'',it.styleNo||'',it.styleType||'',it.category||'',it.categoryGroup||'',it.vendor||'',num(it.price),ot,at,ot-at,Math.round(ot*num(it.price)),it.orderDate||'',it.deliveryDate||'',it.onShelf||'',it.freight||'',it.ship||'',it.pay||'',num(it.moq)||'',it.accessory||'',it.labelNote||'',it.tag||'']);
+    s2.push([p.name||'',it.styleNo||'',it.styleType||'',it.category||'',it.categoryGroup||'',it.vendor||'',num(it.price),ot,at,ot-at,Math.round(ot*num(it.price)),it.orderDate||'',it.sampleDate||'',it.deliveryDate||'',it.prodDays||'',it.onShelf||'',it.freight||'',it.ship||'',it.pay||'',num(it.moq)||'',it.accessory||'',it.labelNote||'',it.tag||'']);
   });
 
   var h3=['檔期','款號','顏色','尺寸','訂購數'].concat(CONFIG.stores).concat(['官網','已配','留倉']);
