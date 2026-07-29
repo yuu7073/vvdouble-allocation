@@ -1128,6 +1128,13 @@ function openSheetFromData(it){
     '<td class="lbl">款別</td><td>'+esc(it.styleType||'')+'</td>'+
     '<td class="lbl">品類</td><td>'+esc(it.category||'')+'</td>'+
     '<td class="lbl">廠商</td><td>'+esc(it.vendor||'')+'</td></tr>'+
+    '<tr>'+
+    '<td style="background:#FF2D2D;color:#111;font-weight:900;font-size:15px;border:2px solid #111;white-space:nowrap">交大貨日期</td>'+
+    '<td style="background:#FF2D2D;color:#111;font-weight:900;font-size:16px;border:2px solid #111">'+esc(it.deliveryDate||'—')+'</td>'+
+    '<td style="background:#FFF200;color:#111;font-weight:900;font-size:15px;border:2px solid #111;white-space:nowrap">交拍樣日期</td>'+
+    '<td style="background:#FFF200;color:#111;font-weight:900;font-size:16px;border:2px solid #111">'+esc(it.sampleDate||'—')+'</td>'+
+    '<td style="background:#FFA51F;color:#111;font-weight:900;font-size:15px;border:2px solid #111;white-space:nowrap">做貨天數</td>'+
+    '<td style="background:#FFA51F;color:#111;font-weight:900;font-size:16px;border:2px solid #111" colspan="3">'+esc(it.prodDays||'—')+'</td></tr>'+
     '<tr><td class="lbl">下單日期</td><td>'+esc(it.orderDate||'')+'</td>'+
     '<td class="lbl">預計上架日</td><td>'+esc(it.onShelf||'')+'</td>'+
     '<td class="lbl">價格</td><td>'+(it.price||'')+'</td>'+
@@ -1138,11 +1145,7 @@ function openSheetFromData(it){
     '<td class="lbl">輔料</td><td>'+esc(it.accessory||'')+'</td></tr>'+
     '<tr><td class="lbl">領標</td><td colspan="3">'+esc(it.labelNote||'')+'</td>'+
     '<td class="lbl">吊牌</td><td colspan="3">'+esc(it.tag||'')+'</td></tr></table>';
-  h+='<table class="sh-key">'+
-    '<tr style="background:#FF2D2D"><td class="k">交大貨日期</td><td>'+esc(it.deliveryDate||'—')+'</td></tr>'+
-    '<tr style="background:#FFF200"><td class="k">交拍樣日期</td><td>'+esc(it.sampleDate||'—')+'</td></tr>'+
-    '<tr style="background:#FFA51F"><td class="k">做貨天數</td><td>'+esc(it.prodDays||'—')+'</td></tr>'+
-    '</table>';
+
   h+='<div class="sh-2col">';
   var imgs=arr(it.images);if(!imgs.length&&it.image)imgs=[it.image];
   var cimgs=arr(it.colorImages);
