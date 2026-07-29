@@ -139,6 +139,8 @@ a{color:var(--blue)}
   .sheet-actions{display:none !important}
   #sheetBody{border:none}
 }
+#hoverPreview{position:fixed;z-index:170;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 32px rgba(51,65,92,.35);padding:6px}
+#hoverPreview img{max-width:360px;max-height:440px;display:block;border-radius:6px}
 #lightbox{position:fixed;inset:0;background:rgba(20,26,40,.85);z-index:180;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:20px}
 #lightbox img{max-width:94vw;max-height:92vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.5);background:#fff}
 hidden,[hidden]{display:none !important}
@@ -248,6 +250,7 @@ hidden,[hidden]{display:none !important}
     <p id="loginErr" style="color:var(--danger);margin-top:10px" hidden>密碼錯誤</p>
   </div>
 </div>
+<div id="hoverPreview" hidden><img id="hoverPreviewImg" alt=""></div>
 <div id="lightbox" hidden><img id="lightboxImg" alt=""></div>
 <div id="sheetModal" hidden>
   <div class="sheet-panel">
@@ -759,6 +762,15 @@ function renderOverview(){
 }
 
 /* ---------- 款式列表 ---------- */
+function moveHoverPreview(e){
+  var hp=$('hoverPreview');if(hp.hidden)return;
+  var x=e.clientX+18,y=e.clientY+12;
+  var r=hp.getBoundingClientRect();
+  if(x+r.width>window.innerWidth-8)x=e.clientX-r.width-18;
+  if(y+r.height>window.innerHeight-8)y=Math.max(8,window.innerHeight-r.height-8);
+  if(x<8)x=8;
+  hp.style.left=x+'px';hp.style.top=y+'px';
+}
 var _lsTm;
 function renderList(){
   var el=$('page-list');
@@ -799,7 +811,12 @@ function renderList(){
   el.querySelectorAll('[data-edit]').forEach(function(b){b.addEventListener('click',function(){editItem(b.dataset.edit);});});
   el.querySelectorAll('[data-delitem]').forEach(function(b){b.addEventListener('click',function(){delItem(b.dataset.delitem);});});
   el.querySelectorAll('[data-sheet]').forEach(function(b){b.addEventListener('click',function(){openSheet(b.dataset.sheet);});});
-  el.querySelectorAll('.thumb img').forEach(function(im){im.addEventListener('click',function(){$('lightboxImg').src=im.src;$('lightbox').hidden=false;});});
+  el.querySelectorAll('.thumb img').forEach(function(im){
+    im.addEventListener('click',function(){$('hoverPreview').hidden=true;$('lightboxImg').src=im.src;$('lightbox').hidden=false;});
+    im.addEventListener('mouseenter',function(e){$('hoverPreviewImg').src=im.src;$('hoverPreview').hidden=false;moveHoverPreview(e);});
+    im.addEventListener('mousemove',moveHoverPreview);
+    im.addEventListener('mouseleave',function(){$('hoverPreview').hidden=true;});
+  });
 }
 
 /* ---------- 檔期管理 ---------- */
