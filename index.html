@@ -300,6 +300,7 @@ var ovMonth=null, ovPeriod='all';
 var listMonth='all', listPeriod='all', listSearch='';
 var editItemId=null, editPeriodId=null;
 var formRows=[], formMeas=[], formImage='';
+var MEAS_DEFAULTS=['肩寬','胸寬','夾口','袖長','袖口','下擺寬','全長'];
 
 /* ---------- 小工具 ---------- */
 function $(id){return document.getElementById(id);}
@@ -565,7 +566,7 @@ function resetForm(){
   $('f_notes').innerHTML='';
   $('f_category').value='';
   formImage='';$('f_image').value='';showImage();
-  formMeas=['肩寬','胸寬','夾口','袖長','袖口','下擺寬','全長'].map(function(n){return {name:n,value:''};});
+  formMeas=MEAS_DEFAULTS.map(function(n){return {name:n,value:''};});
   formRows=[{color:(CONFIG.baseColors[0]||'白'),size:CONFIG.sizes[0]||'F',orderQty:0,alloc:{},web:0}];
   renderMeas();renderDetail();
 }
@@ -609,7 +610,8 @@ function editItem(id){
   $('f_label').value=it.labelNote||'';$('f_notes').innerHTML=it.notes||'';
   formImage=it.image||'';showImage();
   formMeas=arr(it.measurements).map(function(m){return {name:m.name||'',value:m.value||''};});
-  if(!formMeas.length)formMeas=[{name:'',value:''}];
+  var _mn=formMeas.map(function(m){return m.name;});
+  MEAS_DEFAULTS.forEach(function(n){if(_mn.indexOf(n)<0)formMeas.push({name:n,value:''});});
   formRows=arr(it.rows).map(function(r){return {color:r.color,size:r.size,orderQty:num(r.orderQty),alloc:r.alloc?JSON.parse(JSON.stringify(r.alloc)):{},web:num(r.web)};});
   renderMeas();renderDetail();
   window.scrollTo(0,0);
