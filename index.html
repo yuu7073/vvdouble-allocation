@@ -347,6 +347,23 @@ function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('show');c
 function todayMonth(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function swatchOf(c){return SWATCH[c]||'#CBD3E0';}
 function emailKey(e){return String(e||'').toLowerCase().replace(/\./g,',');}
+function cleanHtml(html){
+  var d=document.createElement('div');d.innerHTML=String(html||'');
+  var all=d.querySelectorAll('*');
+  for(var i=all.length-1;i>=0;i--){
+    var el2=all[i];var tag=el2.tagName.toLowerCase();
+    if(['b','i','u','em','strong','font','span','div','br','p'].indexOf(tag)<0){
+      if(el2.parentNode)el2.parentNode.removeChild(el2);continue;
+    }
+    for(var j=el2.attributes.length-1;j>=0;j--){
+      var a=el2.attributes[j];var n=a.name.toLowerCase();var v=String(a.value||'').toLowerCase();
+      var ok=(n==='style'&&v.indexOf('expression')<0&&v.indexOf('url(')<0&&v.indexOf('javascript')<0)||(tag==='font'&&(n==='color'||n==='size'));
+      if(!ok)el2.removeAttribute(a.name);
+    }
+  }
+  return d.innerHTML;
+}
+function imgSrc(u){u=String(u||'');return u.indexOf('data:image')===0?u:'';}
 function isAdmin(){return ROLE==='admin';}
 function arr(v){if(Array.isArray(v))return v.filter(function(x){return x!=null;});if(v&&typeof v==='object')return Object.keys(v).sort().map(function(k){return v[k];}).filter(function(x){return x!=null;});return [];}
 function allColors(){return (CONFIG.baseColors||[]).concat(CONFIG.accentColors||[]);}
@@ -440,13 +457,22 @@ function init(){
   auth.onAuthStateChanged(function(u){
     if(!u){USER=null;ROLE=null;$('login').hidden=false;$('userBox').hidden=true;return;}
     USER=u;
-    db.ref(ROOT+'/roles/'+emailKey(u.email)).once('value').then(function(s){
-      var r=s.val();
-      if(!r||!r.role){var e2=$('loginErr');e2.textContent='此帳號尚未授權，請聯絡主管開通';e2.hidden=false;auth.signOut();return;}
+    function grant(r){
       ROLE=r.role;
       $('login').hidden=true;$('userBox').hidden=false;
       $('userEmail').textContent=(r.name?r.name+'｜':'')+u.email+(ROLE==='admin'?'（主管）':'（一般）');
       startData();
+    }
+    function deny(){var e2=$('loginErr');e2.textContent='此帳號尚未授權，請聯絡主管開通';e2.hidden=false;auth.signOut();}
+    db.ref(ROOT+'/roles/'+u.uid).once('value').then(function(s){
+      var r=s.val();
+      if(r&&r.role){grant(r);return;}
+      db.ref(ROOT+'/roles/'+emailKey(u.email)).once('value').then(function(s2){
+        var r2=s2.val();
+        if(!r2||!r2.role){deny();return;}
+        db.ref(ROOT+'/roles/'+u.uid).set({email:u.email,role:r2.role,name:r2.name||''}).catch(function(){});
+        grant(r2);
+      }).catch(deny);
     }).catch(function(){var e3=$('loginErr');e3.textContent='讀取權限失敗，請重新整理';e3.hidden=false;});
   });
 }
@@ -730,7 +756,7 @@ function collectFormItem(){
     onShelf:($('f_onShelfSel').value==='__other'?$('f_onShelf').value:$('f_onShelfSel').value),
     freight:$('f_freight').value.trim(),ship:$('f_ship').value.trim(),pay:$('f_pay').value.trim(),
     price:num($('f_price').value),accessory:$('f_accessory').value.trim(),moq:num($('f_moq').value),
-    labelNote:$('f_label').value.trim(),tag:$('f_tag').value,notes:$('f_notes').innerHTML,
+    labelNote:$('f_label').value.trim(),tag:$('f_tag').value,notes:cleanHtml($('f_notes').innerHTML),
     images:formImages.slice(),colorImages:formColorImages.slice(),image:formImages[0]||'',
     measurements:formMeas.filter(function(m){return String(m.name||'').trim()||String(m.value||'').trim();}),
     rows:rows,updatedAt:Date.now()
@@ -763,7 +789,7 @@ function editItem(id){
   setSel('f_accessory',it.accessory||'');updateAccPreview();
   $('f_moq').value=it.moq||'';
   setSel('f_label',it.labelNote||'');setSel('f_tag',it.tag||'');
-  $('f_notes').innerHTML=it.notes||'';
+  $('f_notes').innerHTML=cleanHtml(it.notes||'');
   formImages=arr(it.images).slice();if(!formImages.length&&it.image)formImages=[it.image];
   formColorImages=arr(it.colorImages).slice();
   renderThumbs();
@@ -954,7 +980,7 @@ function renderList(){
     ids.forEach(function(id){
       var it=ITEMS[id],p=PERIODS[it.periodId]||{};
       var ot=itemOrderTotal(it),at=itemAllocTotalCfg(it),d=ot-at;
-      var timg=arr(it.images)[0]||it.image||'';
+      var timg=imgSrc(arr(it.images)[0]||it.image||'');
       html+='<div class="item-card"><div class="thumb">'+(timg?'<img src="'+timg+'" style="cursor:zoom-in" title="點擊放大">':'<div class="noimg">無圖片</div>')+'</div>'+
         '<div class="ib"><div class="sn">'+esc(it.styleNo||'')+'　<span class="badge badge-blue">'+esc(it.category||'')+'</span></div>'+
         '<div class="meta">'+esc((p.month||'')+'｜'+(p.name||''))+'　'+esc(it.vendor||'')+'<br>訂購 <b>'+fmt(ot)+'</b>｜已配 <b>'+fmt(at)+'</b>　'+
@@ -1099,7 +1125,7 @@ function renderSettings(){
   html+='</div><div class="inline-add" style="flex-wrap:wrap">'+
     '<input id="ac_name" placeholder="名字" style="width:90px">'+
     '<input id="ac_email" placeholder="Email" style="width:200px">'+
-    '<input id="ac_pw" placeholder="初始密碼（至少6碼）" style="width:150px">'+
+    '<input id="ac_pw" placeholder="初始密碼（至少8碼）" style="width:150px">'+
     '<select id="ac_role" class="mini-input" style="width:auto"><option value="staff">一般</option><option value="admin">主管</option></select>'+
     '<button class="btn btn-primary btn-sm" id="ac_add">建立帳號</button></div>'+
     '<p class="hint">對方第一次登入用 Email＋初始密碼，之後可在登入頁點「忘記密碼」自行改密碼。</p></div>';
@@ -1109,19 +1135,22 @@ function createAccount(){
   if(DEMO){toast('示範模式不能建立帳號');return;}
   var nm=$('ac_name').value.trim(),em=$('ac_email').value.trim(),pw=$('ac_pw').value,role=$('ac_role').value;
   if(!em||em.indexOf('@')<0){toast('請填正確 Email');return;}
-  if(!pw||pw.length<6){toast('初始密碼至少 6 碼');return;}
-  function writeRole(){
-    dbSet(ROOT+'/roles/'+emailKey(em),{email:em,role:role,name:nm||''});
+  if(!pw||pw.length<8){toast('初始密碼至少 8 碼');return;}
+  function done(key){
+    dbSet(ROOT+'/roles/'+key,{email:em,role:role,name:nm||''});
     $('ac_name').value='';$('ac_email').value='';$('ac_pw').value='';
     toast('已建立並授權：'+em);
   }
   var sec=firebase.initializeApp(firebaseConfig,'sec'+Date.now());
   sec.auth().createUserWithEmailAndPassword(em,pw)
-    .then(function(){return sec.auth().signOut();})
-    .then(function(){try{sec.delete();}catch(x){}writeRole();})
+    .then(function(cred){
+      var uid=cred.user.uid;
+      sec.auth().signOut();try{sec.delete();}catch(x){}
+      done(uid);
+    })
     .catch(function(e){
       try{sec.delete();}catch(x){}
-      if(e&&e.code==='auth/email-already-in-use'){writeRole();toast('帳號已存在，已直接授權');}
+      if(e&&e.code==='auth/email-already-in-use'){done(emailKey(em));toast('帳號已存在，已直接授權');}
       else toast('建立失敗：'+(e&&e.message||''));
     });
 }
@@ -1218,13 +1247,13 @@ function openSheetFromData(it){
     '<td class="lbl">吊牌</td><td colspan="3">'+esc(it.tag||'')+'</td></tr></table>';
 
   h+='<div class="sh-2col">';
-  var imgs=arr(it.images);if(!imgs.length&&it.image)imgs=[it.image];
-  var cimgs=arr(it.colorImages);
+  var imgs=arr(it.images).map(imgSrc).filter(Boolean);if(!imgs.length&&imgSrc(it.image))imgs=[imgSrc(it.image)];
+  var cimgs=arr(it.colorImages).map(imgSrc).filter(Boolean);
   h+='<div>';
   h+='<div class="sh-imgbox">'+(imgs.length?imgs.map(function(u){return '<img src="'+u+'">';}).join(''):'<span style="color:var(--muted);font-size:12px">無款式圖片</span>')+'</div>';
   if(cimgs.length){h+='<div style="font-size:12px;font-weight:800;color:var(--blue-dark);margin:8px 0 4px">色卡</div><div class="sh-imgbox" style="min-height:0">'+cimgs.map(function(u){return '<img src="'+u+'">';}).join('')+'</div>';}
   h+='</div>';
-  h+='<div class="sh-notes"><div class="nt">備註</div>'+(it.notes||'<span style="color:var(--muted)">—</span>')+'</div>';
+  h+='<div class="sh-notes"><div class="nt">備註</div>'+(cleanHtml(it.notes)||'<span style="color:var(--muted)">—</span>')+'</div>';
   h+='</div>';
   var meas=arr(it.measurements).filter(function(m){return String(m.value==null?'':m.value).trim()!=='';});
   if(meas.length){
