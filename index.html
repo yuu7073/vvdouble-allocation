@@ -761,7 +761,7 @@ function renderOverview(){
   var ids=itemsOfPeriods(scopePids);
 
   var totalOrder=0,allocT=0,webT=0,storeT={},colorPieces={},basePieces=0,accentPieces=0;
-  var totalAmt=0,reserveAmt=0,vendorStat={},sizePieces={};
+  var totalAmt=0,vendorStat={},sizePieces={};
   var groupStat={};(CONFIG.categories||[]).forEach(function(g){groupStat[g.name]={styles:0,pieces:0,pct:num(g.pct)};});
   CONFIG.stores.forEach(function(s){storeT[s]=0;});
   ids.forEach(function(id){
@@ -781,14 +781,11 @@ function renderOverview(){
       var c=r.color||'未填';
       colorPieces[c]=(colorPieces[c]||0)+oq;
       if(colorType(c)==='base')basePieces+=oq;else accentPieces+=oq;
-      var ra=rowAllocCfg(r);
-      reserveAmt+=(oq-ra)*price;
       CONFIG.stores.forEach(function(s){var v=num(r.alloc&&r.alloc[s]);storeT[s]+=v;allocT+=v;});
       webT+=num(r.web);
     });
   });
   allocT+=webT;
-  var stock=0;scopePids.forEach(function(pid){stock+=num(PERIODS[pid].stockReserve);});
   var target=num(MONTHS[ovMonth]&&MONTHS[ovMonth].target);
   var mPieces=0;itemsOfPeriods(pids).forEach(function(id){mPieces+=itemOrderTotal(ITEMS[id]);});
   var mPct=target>0?mPieces/target*100:0;
@@ -808,8 +805,12 @@ function renderOverview(){
     '<div class="stat"><div class="lbl">月目標完成（整月）</div><div class="num'+(target>0&&mPct<100?' hl':'')+'">'+(target>0?(Math.round(mPct*10)/10)+'%':'—')+'</div><div class="bar-track" style="margin-top:6px"><div class="bar-fill'+(mPct>=100?'':' orange')+'" style="width:'+Math.min(100,mPct)+'%"></div></div><div class="note">'+fmt(mPieces)+' / '+(target>0?fmt(target):'未設定目標')+' 件</div></div>'+
     '<div class="stat"><div class="lbl">下單總金額</div><div class="num hl">$'+fmt(Math.round(totalAmt))+'</div><div class="note">Σ 每款訂購數 × 單價</div></div>'+
     '<div class="stat"><div class="lbl">已配 / 未配</div><div class="num">'+fmt(allocT)+'<small style="font-size:14px;color:var(--muted)"> / '+fmt(unalloc)+'</small></div><div class="note">'+(unalloc<0?'<span class="diff-warn">配貨超過訂購量！</span>':'未配＝已下單但未分到店/官網')+'</div></div>'+
-    '<div class="stat"><div class="lbl">備貨庫存（實際留倉）</div><div class="num">'+fmt(unalloc)+'</div><div class="note">目標 '+fmt(stock)+' 件｜'+(unalloc-stock===0?'剛好達標':(unalloc-stock>0?'比目標多 '+fmt(unalloc-stock)+' 件':'<span class="diff-warn">比目標少 '+fmt(stock-unalloc)+' 件</span>'))+'</div></div>'+
-    '<div class="stat"><div class="lbl">備貨金額（自動算）</div><div class="num hl">$'+fmt(Math.round(reserveAmt))+'</div><div class="note">Σ 留倉件數（訂購−已配）× 單價</div></div>'+
+    '<div class="stat" style="grid-column:span 2"><div class="lbl">官網 : 門市（七間）配貨佔比</div>'+
+    (allocT>0
+      ?'<div class="num"><span class="hl">'+Math.round(webT/allocT*100)+'%</span><small style="font-size:15px;color:var(--muted)"> 官網</small>　'+(100-Math.round(webT/allocT*100))+'%<small style="font-size:15px;color:var(--muted)"> 門市</small></div>'+
+       '<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:6px"><div style="background:var(--orange);width:'+(webT/allocT*100)+'%"></div><div style="background:var(--blue);flex:1"></div></div>'
+      :'<div class="num">—</div>')+
+    '<div class="note">官網 '+fmt(webT)+' 件｜門市合計 '+fmt(allocT-webT)+' 件</div></div>'+
     '</div>';
 
   var maxStore=1;CONFIG.stores.forEach(function(s){if(storeT[s]>maxStore)maxStore=storeT[s];});if(webT>maxStore)maxStore=webT;
@@ -870,12 +871,12 @@ function renderOverview(){
   html+='</div></div>';
 
   if(ovPeriod==='all'&&pids.length){
-    html+='<div class="card" style="margin-top:14px"><h3>本月各檔期</h3><div class="tscroll"><table class="tbl"><thead><tr><th>檔期</th><th>上架日</th><th>款數</th><th>下單件數</th><th>下單金額</th><th>已配件數</th><th>備貨目標</th><th>實際留倉</th><th>備貨金額(自動)</th></tr></thead><tbody>';
+    html+='<div class="card" style="margin-top:14px"><h3>本月各檔期</h3><div class="tscroll"><table class="tbl"><thead><tr><th>檔期</th><th>上架日</th><th>款數</th><th>下單件數</th><th>下單金額</th><th>已配件數</th><th>官網配貨</th><th>官網佔比</th></tr></thead><tbody>';
     pids.forEach(function(pid){
       var p=PERIODS[pid];var pi=itemsOfPeriods([pid]);
-      var oq=0,aq=0,amt=0,rsAmt=0;
-      pi.forEach(function(id){var it=ITEMS[id];var pr=num(it.price);arr(it.rows).forEach(function(r){var o=num(r.orderQty);var ra=rowAllocCfg(r);oq+=o;aq+=ra;amt+=o*pr;rsAmt+=(o-ra)*pr;});});
-      html+='<tr><td>'+esc(p.name||'')+'</td><td>'+esc(p.date||'')+'</td><td>'+pi.length+'</td><td>'+fmt(oq)+'</td><td>$'+fmt(Math.round(amt))+'</td><td>'+fmt(aq)+'</td><td>'+fmt(num(p.stockReserve))+'</td><td>$'+fmt(Math.round(rsAmt))+'</td></tr>';
+      var oq=0,aq=0,amt=0,wq=0;
+      pi.forEach(function(id){var it=ITEMS[id];var pr=num(it.price);arr(it.rows).forEach(function(r){var o=num(r.orderQty);oq+=o;aq+=rowAllocCfg(r);amt+=o*pr;wq+=num(r.web);});});
+      html+='<tr><td>'+esc(p.name||'')+'</td><td>'+esc(p.date||'')+'</td><td>'+pi.length+'</td><td>'+fmt(oq)+'</td><td>$'+fmt(Math.round(amt))+'</td><td>'+fmt(aq)+'</td><td>'+fmt(wq)+'</td><td>'+(aq>0?Math.round(wq/aq*100)+'%':'—')+'</td></tr>';
     });
     html+='</tbody></table></div></div>';
   }
@@ -951,7 +952,6 @@ function renderPeriods(){
     '<div class="fld"><label>月份 *</label><input id="p_month" type="month"></div>'+
     '<div class="fld"><label>檔期名稱 *</label><input id="p_name" placeholder="例：8/25檔"></div>'+
     '<div class="fld"><label>上架日期</label><input id="p_date" type="date"></div>'+
-    '<div class="fld"><label>備貨目標（手動填）</label><input id="p_stock" type="number" min="0" placeholder="件數"></div>'+
     '<div class="fld"><label>系列主題</label><input id="p_theme"></div>'+
     '<div class="fld"><label>色彩占比</label><input id="p_colorRatio" placeholder="例：粉 藍 黃 橙"></div>'+
     '<div class="fld"><label>系列元素</label><input id="p_elements" placeholder="例：格紋 流蘇 大口袋"></div>'+
@@ -969,10 +969,10 @@ function renderPeriods(){
       '<div>已下單 <b style="color:var(--orange)">'+fmt(mPieces)+'</b> 件'+(pct!=null?'（'+pct+'%）':'')+'</div></div>';
     pids.forEach(function(pid){
       var p=PERIODS[pid];
-      var pi=itemsOfPeriods([pid]);var pieces=0,aq=0;
-      pi.forEach(function(id){pieces+=itemOrderTotal(ITEMS[id]);aq+=itemAllocTotalCfg(ITEMS[id]);});
+      var pi=itemsOfPeriods([pid]);var pieces=0,aq=0,wq=0;
+      pi.forEach(function(id){pieces+=itemOrderTotal(ITEMS[id]);aq+=itemAllocTotalCfg(ITEMS[id]);arr(ITEMS[id].rows).forEach(function(r){wq+=num(r.web);});});
       html+='<div class="pd-row"><div><div class="pn">'+esc(p.name||'')+'　<span class="hint">'+esc(p.date||'')+'</span></div>'+
-        '<div class="pm">主題：'+esc(p.theme||'—')+'｜色彩：'+esc(p.colorRatio||'—')+'｜元素：'+esc(p.elements||'—')+'<br>款數 '+pi.length+'｜下單 '+fmt(pieces)+' 件｜備貨目標 <input class="mini-input" data-pstock="'+pid+'" value="'+(p.stockReserve||'')+'"> 件｜實際留倉 <b>'+fmt(pieces-aq)+'</b> 件</div></div>'+
+        '<div class="pm">主題：'+esc(p.theme||'—')+'｜色彩：'+esc(p.colorRatio||'—')+'｜元素：'+esc(p.elements||'—')+'<br>款數 '+pi.length+'｜下單 '+fmt(pieces)+' 件｜已配 '+fmt(aq)+' 件｜官網 <b>'+fmt(wq)+'</b> 件（'+(aq>0?Math.round(wq/aq*100)+'%':'—')+'）</div></div>'+
         '<div style="display:flex;flex-direction:column;gap:6px"><button class="btn btn-ghost btn-sm" data-pedit="'+pid+'">編輯</button><button class="btn btn-ghost btn-sm" data-pdel="'+pid+'" style="color:var(--danger)">刪除</button></div></div>';
     });
     html+='</div>';
@@ -981,13 +981,13 @@ function renderPeriods(){
   if(editPeriodId&&PERIODS[editPeriodId]){
     var p=PERIODS[editPeriodId];
     $('p_month').value=p.month||todayMonth();$('p_name').value=p.name||'';$('p_date').value=p.date||'';
-    $('p_stock').value=p.stockReserve||'';$('p_theme').value=p.theme||'';$('p_colorRatio').value=p.colorRatio||'';$('p_elements').value=p.elements||'';
+    $('p_theme').value=p.theme||'';$('p_colorRatio').value=p.colorRatio||'';$('p_elements').value=p.elements||'';
     $('p_cancel').addEventListener('click',function(){editPeriodId=null;renderPeriods();});
   }else{$('p_month').value=todayMonth();}
   $('p_add').addEventListener('click',function(){
     var m=$('p_month').value,n=$('p_name').value.trim();
     if(!m||!n){toast('請填月份與檔期名稱');return;}
-    var data={month:m,name:n,date:$('p_date').value,theme:$('p_theme').value.trim(),colorRatio:$('p_colorRatio').value.trim(),elements:$('p_elements').value.trim(),stockReserve:num($('p_stock').value)};
+    var data={month:m,name:n,date:$('p_date').value,theme:$('p_theme').value.trim(),colorRatio:$('p_colorRatio').value.trim(),elements:$('p_elements').value.trim()};
     var needMonth=!MONTHS[m];
     if(editPeriodId){dbUpdate(ROOT+'/periods/'+editPeriodId,data);toast('已更新檔期');editPeriodId=null;}
     else{data.createdAt=Date.now();dbPush(ROOT+'/periods',data);toast('已建立檔期：'+n);}
@@ -995,7 +995,6 @@ function renderPeriods(){
     renderPeriods();
   });
   el.querySelectorAll('[data-mtarget]').forEach(function(inp){inp.addEventListener('change',function(){dbSet(ROOT+'/months/'+inp.dataset.mtarget+'/target',num(inp.value));toast('已更新月目標');});});
-  el.querySelectorAll('[data-pstock]').forEach(function(inp){inp.addEventListener('change',function(){dbSet(ROOT+'/periods/'+inp.dataset.pstock+'/stockReserve',num(inp.value));toast('已更新備貨目標');});});
   el.querySelectorAll('[data-pdel]').forEach(function(b){b.addEventListener('click',function(){
     var pid=b.dataset.pdel;var used=itemsOfPeriods([pid]).length;
     if(used>0){alert('此檔期底下還有 '+used+' 款，請先刪除或把款式改掛其他檔期');return;}
@@ -1195,12 +1194,12 @@ function exportExcel(){
   if(!ids.length){toast('目前範圍沒有款式資料');return;}
   var scopeName=ovMonth+(ovPeriod==='all'?'_整月':'_'+(((PERIODS[ovPeriod]||{}).name)||'檔期'));
 
-  var s1=[['檔期','上架日','款數','下單件數','下單金額','已配件數','備貨目標','實際留倉','備貨金額']];
+  var s1=[['檔期','上架日','款數','下單件數','下單金額','已配件數','官網件數','門市件數','官網佔比']];
   pids.forEach(function(pid){
     var p=PERIODS[pid];var pi=itemsOfPeriods([pid]);
-    var oq=0,aq=0,amt=0,rsAmt=0;
-    pi.forEach(function(id){var it=ITEMS[id];var pr=num(it.price);arr(it.rows).forEach(function(r){var o=num(r.orderQty);var ra=rowAllocCfg(r);oq+=o;aq+=ra;amt+=o*pr;rsAmt+=(o-ra)*pr;});});
-    s1.push([p.name||'',p.date||'',pi.length,oq,Math.round(amt),aq,num(p.stockReserve),oq-aq,Math.round(rsAmt)]);
+    var oq=0,aq=0,amt=0,wq=0;
+    pi.forEach(function(id){var it=ITEMS[id];var pr=num(it.price);arr(it.rows).forEach(function(r){var o=num(r.orderQty);oq+=o;aq+=rowAllocCfg(r);amt+=o*pr;wq+=num(r.web);});});
+    s1.push([p.name||'',p.date||'',pi.length,oq,Math.round(amt),aq,wq,aq-wq,(aq>0?Math.round(wq/aq*100)+'%':'')]);
   });
 
   var s2=[['檔期','款號','款別','品類','大類','廠商','單價','訂購件數','已配件數','留倉件數','下單金額','下單日期','交拍樣日期','交大貨日期','做貨天數','預計上架日','貨運行','運輸方式','付款方式','MOQ','輔料','領標','吊牌']];
