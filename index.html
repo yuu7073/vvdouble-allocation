@@ -172,12 +172,18 @@ a{color:var(--blue)}
 #bdWorld{position:absolute;left:0;top:0;transform-origin:0 0}
 .bd-item{position:absolute;user-select:none}
 .bd-item.sel{outline:2px solid var(--blue);outline-offset:1px}
-.bd-img{background:#fff;border-radius:6px;box-shadow:0 4px 14px rgba(51,65,92,.18);overflow:hidden}
-.bd-img img{width:100%;height:100%;display:block;pointer-events:none}
+.bd-img{background:#fff;border-radius:6px;box-shadow:0 4px 14px rgba(51,65,92,.18)}
+.bd-img img{width:100%;height:100%;display:block;pointer-events:none;border-radius:6px}
 .bd-note{box-shadow:0 5px 14px rgba(51,65,92,.22);padding:14px;font-size:16px;line-height:1.5;overflow:hidden;word-break:break-word}
 .bd-text{font-weight:800;color:var(--ink);line-height:1.35;word-break:break-word}
 .bd-swatch{border-radius:10px;box-shadow:0 4px 12px rgba(51,65,92,.2);border:1px solid rgba(51,65,92,.12)}
 .bd-label{position:absolute;left:0;right:0;bottom:-22px;text-align:center;font-size:12px;color:var(--muted);pointer-events:none}
+.bd-corner{position:absolute;width:14px;height:14px;background:#fff;border:2px solid var(--blue);border-radius:50%;opacity:0;z-index:6}
+.bd-item:hover .bd-corner,.bd-item.sel .bd-corner{opacity:1}
+.bd-corner[data-c="nw"]{left:-8px;top:-8px;cursor:nwse-resize}
+.bd-corner[data-c="ne"]{right:-8px;top:-8px;cursor:nesw-resize}
+.bd-corner[data-c="sw"]{left:-8px;bottom:-8px;cursor:nesw-resize}
+.bd-corner[data-c="se"]{right:-8px;bottom:-8px;cursor:nwse-resize}
 .bd-handle{position:absolute;width:14px;height:14px;background:#fff;border:2px solid var(--blue);border-radius:50%;right:-9px;bottom:-9px;cursor:nwse-resize;z-index:5}
 .bd-guide{position:absolute;background:#FF4FA0;pointer-events:none;z-index:999}
 #bdMarquee{position:absolute;border:1.5px solid var(--blue);background:rgba(68,114,196,.12);display:none;z-index:90;pointer-events:none}
@@ -1327,7 +1333,8 @@ function bdToWorld(cx,cy){var r=$('bdViewport').getBoundingClientRect();return {
 function bdApplyView(){$('bdWorld').style.transform='translate('+bdView.x+'px,'+bdView.y+'px) scale('+bdView.s+')';$('bdZoomPct').textContent=Math.round(bdView.s*100)+'%';}
 function bdItemHtml(id,it){
   var st='left:'+it.x+'px;top:'+it.y+'px;width:'+it.w+'px;z-index:'+num(it.z)+';';
-  if(it.type==='image')return '<div class="bd-item bd-img" data-id="'+esc(id)+'" style="'+st+'height:'+it.h+'px"><img src="'+imgSrc(it.src)+'">'+(it.label?'<div class="bd-label">'+esc(it.label)+'</div>':'')+'</div>';
+  var corners='<b class="bd-corner" data-c="nw"></b><b class="bd-corner" data-c="ne"></b><b class="bd-corner" data-c="sw"></b><b class="bd-corner" data-c="se"></b>';
+  if(it.type==='image')return '<div class="bd-item bd-img" data-id="'+esc(id)+'" style="'+st+'height:'+it.h+'px"><img src="'+imgSrc(it.src)+'">'+(it.label?'<div class="bd-label">'+esc(it.label)+'</div>':'')+corners+'</div>';
   if(it.type==='note')return '<div class="bd-item bd-note" data-id="'+esc(id)+'" style="'+st+'height:'+it.h+'px;background:'+esc(it.color)+';font-size:'+num(it.fs)+'px"><div class="txt">'+esc(it.text)+'</div></div>';
   if(it.type==='text')return '<div class="bd-item bd-text" data-id="'+esc(id)+'" style="'+st+'font-size:'+num(it.fs)+'px"><div class="txt">'+esc(it.text)+'</div></div>';
   if(it.type==='swatch')return '<div class="bd-item bd-swatch" data-id="'+esc(id)+'" style="'+st+'height:'+it.h+'px;background:'+esc(it.color)+'"></div>';
@@ -1391,7 +1398,8 @@ function bdUpdateSelUI(){
     var s=bdSel.indexOf(d.dataset.id)>=0;
     d.classList.toggle('sel',s);
     var h=d.querySelector('.bd-handle');
-    if(s&&bdSel.length===1&&!h){var hd=document.createElement('div');hd.className='bd-handle';d.appendChild(hd);}
+    var ty=(bdItems[d.dataset.id]||{}).type;
+    if(s&&bdSel.length===1&&ty!=='image'&&!h){var hd=document.createElement('div');hd.className='bd-handle';d.appendChild(hd);}
     if((!s||bdSel.length>1)&&h)h.remove();
   });
   var one=bdSel.length===1?bdById(bdSel[0]):null;
@@ -1560,9 +1568,16 @@ function wireBoardStatic(){
   $('bdViewport').addEventListener('mousedown',function(e){
     if(bdEditing)return;
     var t=e.target.closest('.bd-item');
+    if(e.target.classList.contains('bd-corner')){
+      var tc=e.target.closest('.bd-item');var idc2=tc.dataset.id;var itc=bdById(idc2);
+      bdSel=[idc2];bdUpdateSelUI();
+      bdMode='resize';
+      bdStart={mx:e.clientX,my:e.clientY,x:itc.x,y:itc.y,w:itc.w,h:itc.h,id:idc2,corner:e.target.dataset.c};
+      e.preventDefault();return;
+    }
     if(e.target.classList.contains('bd-handle')){
       var it=bdById(bdSel[0]);
-      bdMode='resize';bdStart={mx:e.clientX,my:e.clientY,w:it.w,h:it.h,id:bdSel[0]};
+      bdMode='resize';bdStart={mx:e.clientX,my:e.clientY,x:it.x,y:it.y,w:it.w,h:it.h,id:bdSel[0],corner:'se'};
       e.preventDefault();return;
     }
     if(t){
@@ -1606,11 +1621,23 @@ function wireBoardStatic(){
     }
     else if(bdMode==='resize'){
       var it=bdById(bdStart.id);if(!it)return;
-      it.w=Math.max(30,bdStart.w+(e.clientX-bdStart.mx)/bdView.s);
-      if(it.type==='image'||it.type==='swatch')it.h=it.w*(bdStart.h/bdStart.w);
-      else if(it.type==='note')it.h=Math.max(60,bdStart.h+(e.clientY-bdStart.my)/bdView.s);
+      var rdx=(e.clientX-bdStart.mx)/bdView.s,rdy=(e.clientY-bdStart.my)/bdView.s;
+      var c=bdStart.corner||'se';
+      if(it.type==='image'||it.type==='swatch'){
+        var ratio=bdStart.h/bdStart.w;
+        var w=bdStart.w+((c==='se'||c==='ne')?rdx:-rdx);
+        w=Math.max(30,w);
+        var h=w*ratio;
+        it.w=w;it.h=h;
+        it.x=(c==='nw'||c==='sw')?bdStart.x+(bdStart.w-w):bdStart.x;
+        it.y=(c==='nw'||c==='ne')?bdStart.y+(bdStart.h-h):bdStart.y;
+      }else if(it.type==='note'){
+        it.w=Math.max(60,bdStart.w+rdx);it.h=Math.max(60,bdStart.h+rdy);
+      }else{
+        it.w=Math.max(60,bdStart.w+rdx);
+      }
       var d=bdEl(bdStart.id);
-      if(d){d.style.width=it.w+'px';if(it.type!=='text')d.style.height=it.h+'px';}
+      if(d){d.style.left=it.x+'px';d.style.top=it.y+'px';d.style.width=it.w+'px';if(it.type!=='text')d.style.height=it.h+'px';}
     }
     if(cropDrag){
       var dx2=e.clientX-cropDrag.mx,dy2=e.clientY-cropDrag.my;
