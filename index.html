@@ -389,6 +389,9 @@ hidden,[hidden]{display:none !important}
   <button class="tt-dot" data-tcolor="#C0392B" style="background:#C0392B" title="紅"></button>
   <button class="tt-dot" data-tcolor="#3E8E5A" style="background:#3E8E5A" title="綠"></button>
   <input id="ttColor" type="color" title="自訂顏色">
+  <span class="tt-sep"></span>
+  <button class="tt-btn" id="ttFsDown" title="縮小文字"><span style="font-size:11px;font-weight:800">A−</span></button>
+  <button class="tt-btn" id="ttFsUp" title="放大文字"><span style="font-size:13px;font-weight:800">A＋</span></button>
 </div>
 <div id="cropOverlay">
   <div id="cropStage"><img id="cropImg"><div id="cropRect">
@@ -1561,6 +1564,15 @@ function wireBoardStatic(){
     if(e.target.id!=='ttColor')e.preventDefault();
   });
   $('bdTextTools').addEventListener('click',function(e){
+    var fsBtn=e.target.closest('#ttFsUp,#ttFsDown');
+    if(fsBtn){
+      var id=bdEditing||bdSel[0];if(!id)return;
+      var it=bdById(id);if(!it)return;
+      it.fs=Math.max(10,Math.min(160,Math.round(num(it.fs||16)*(fsBtn.id==='ttFsUp'?1.2:1/1.2))));
+      var d=bdEl(id);if(d)d.style.fontSize=it.fs+'px';
+      bdWrite(id);
+      return;
+    }
     var t=e.target.closest('[data-tcmd],[data-tcolor]');if(!t)return;
     if(bdSavedRange){var s=window.getSelection();s.removeAllRanges();s.addRange(bdSavedRange);}
     if(t.dataset.tcmd)document.execCommand(t.dataset.tcmd,false,null);
