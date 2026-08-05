@@ -336,6 +336,7 @@ hidden,[hidden]{display:none !important}
       <button class="tb-ic" id="btnSwatch" title="加入色塊（雙擊換色）"><svg viewBox="0 0 24 24"><path d="M12 3c4 5 7 8 7 12a7 7 0 0 1-14 0c0-4 3-7 7-12z"/></svg></button>
       <div class="tb-sep"></div>
       <button class="tb-ic" id="btnCrop" disabled title="裁切圖片"><svg viewBox="0 0 24 24"><path d="M7 3v14h14M3 7h14v14"/></svg></button>
+      <select id="fsSel" class="mini-input" style="width:70px;display:none" title="文字大小"></select>
       <button class="tb-ic" id="btnFsUp" disabled title="放大文字"><span style="font-size:12px;font-weight:800">A+</span></button>
       <button class="tb-ic" id="btnFsDown" disabled title="縮小文字"><span style="font-size:12px;font-weight:800">A−</span></button>
       <span id="noteColors" style="display:none;gap:4px;align-items:center"></span>
@@ -393,6 +394,7 @@ hidden,[hidden]{display:none !important}
   <span class="tt-sep"></span>
   <button class="tt-btn" id="ttFsDown" title="縮小文字"><span style="font-size:11px;font-weight:800">A−</span></button>
   <button class="tt-btn" id="ttFsUp" title="放大文字"><span style="font-size:13px;font-weight:800">A＋</span></button>
+  <select id="ttFsSel" title="字級" style="height:30px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:12px;width:64px"></select>
 </div>
 <div id="cropOverlay">
   <div id="cropStage"><img id="cropImg"><div id="cropRect">
@@ -1394,6 +1396,37 @@ function renderBoard(){
 }
 function renderBoardSafe(){if(bdMode||bdEditing){bdDirty=true;return;}renderBoard();}
 function bdWrite(id){var it=bdItems[id];if(!it||!bdBoardId)return;dbSet(ROOT+'/boards/'+bdBoardId+'/items/'+id,JSON.parse(JSON.stringify(it)));}
+var BD_FS_OPTS=[10,12,14,16,18,20,24,28,32,36,40,48,56,64,80,96];
+function bdSetFsSelect(sel,cur){
+  var h='<option value="">字級</option>';
+  var found=false;
+  BD_FS_OPTS.forEach(function(s){if(s===cur)found=true;h+='<option value="'+s+'"'+(s===cur?' selected':'')+'>'+s+' pt</option>';});
+  if(cur&&!found)h+='<option value="'+cur+'" selected>'+cur+' pt</option>';
+  sel.innerHTML=h;
+}
+function bdTxtTargets(){
+  var ids=bdSel.filter(function(sid){var tt=(bdItems[sid]||{}).type;return tt==='text'||tt==='note';});
+  if(!ids.length&&bdEditing&&bdItems[bdEditing])ids=[bdEditing];
+  return ids;
+}
+function bdApplyFs(val){
+  var ids=bdTxtTargets();if(!ids.length)return;
+  ids.forEach(function(id){
+    var it=bdItems[id];
+    it.fs=Math.max(8,Math.min(200,Math.round(val)));
+    var d=bdEl(id);if(d)d.style.fontSize=it.fs+'px';
+  });
+  bdWriteMany(ids);bdUpdateSelUI();
+}
+function bdScaleFs(f){
+  var ids=bdTxtTargets();if(!ids.length)return;
+  ids.forEach(function(id){
+    var it=bdItems[id];
+    it.fs=Math.max(8,Math.min(200,Math.round(num(it.fs||16)*f)));
+    var d=bdEl(id);if(d)d.style.fontSize=it.fs+'px';
+  });
+  bdWriteMany(ids);bdUpdateSelUI();
+}
 function bdWriteMany(ids){
   if(!bdBoardId)return;
   var payload={};
@@ -1466,8 +1499,17 @@ function bdUpdateSelUI(){
   });
   var one=bdSel.length===1?bdById(bdSel[0]):null;
   $('btnCrop').disabled=!(one&&one.type==='image');
-  var isTxt=one&&(one.type==='text'||one.type==='note');
-  $('btnFsUp').disabled=!isTxt;$('btnFsDown').disabled=!isTxt;
+  var txtIds=bdSel.filter(function(sid){var tt=(bdItems[sid]||{}).type;return tt==='text'||tt==='note';});
+  $('btnFsUp').disabled=!txtIds.length;$('btnFsDown').disabled=!txtIds.length;
+  var fsSel=$('fsSel');
+  if(fsSel){
+    fsSel.style.display=txtIds.length?'inline-block':'none';
+    if(txtIds.length){
+      var sizes=txtIds.map(function(sid){return num(bdItems[sid].fs)||16;});
+      var uni=sizes.every(function(s){return s===sizes[0];})?sizes[0]:'';
+      bdSetFsSelect(fsSel,uni);
+    }
+  }
   $('noteColors').style.display=(one&&one.type==='note')?'inline-flex':'none';
   ['alL','alC','alT','alM','alH'].forEach(function(b){$(b).disabled=bdSel.length<2;});
   ['btnFront','btnBack','btnDel'].forEach(function(b){$(b).disabled=!bdSel.length;});
@@ -1544,7 +1586,14 @@ function seedDemoBoard(){
   MOCK.allocation.boardsMeta={demo1:{name:'8月搭配示範',createdAt:1}};
   MOCK.allocation.boards={demo1:{items:its}};
 }
+function bdSyncTtFs(){
+  var ids=bdTxtTargets();
+  var sel=$('ttFsSel');if(!sel)return;
+  var cur=ids.length?(num((bdItems[ids[0]]||{}).fs)||16):'';
+  bdSetFsSelect(sel,cur);
+}
 function bdShowTextTools(el2){
+  bdSyncTtFs();
   var r=el2.getBoundingClientRect();
   var tt=$('bdTextTools');tt.hidden=false;
   var x=Math.max(8,Math.min(window.innerWidth-300,r.left));
@@ -1580,24 +1629,44 @@ function wireBoardStatic(){
   });
   $('bdTextTools').addEventListener('click',function(e){
     var fsBtn=e.target.closest('#ttFsUp,#ttFsDown');
-    if(fsBtn){
-      var id=bdEditing||bdSel[0];if(!id)return;
-      var it=bdById(id);if(!it)return;
-      it.fs=Math.max(10,Math.min(160,Math.round(num(it.fs||16)*(fsBtn.id==='ttFsUp'?1.2:1/1.2))));
-      var d=bdEl(id);if(d)d.style.fontSize=it.fs+'px';
-      bdWrite(id);
-      return;
-    }
+    if(fsBtn){bdScaleFs(fsBtn.id==='ttFsUp'?1.2:1/1.2);bdSyncTtFs();return;}
     var t=e.target.closest('[data-tcmd],[data-tcolor]');if(!t)return;
     if(bdSavedRange){var s=window.getSelection();s.removeAllRanges();s.addRange(bdSavedRange);}
     if(t.dataset.tcmd)document.execCommand(t.dataset.tcmd,false,null);
     else document.execCommand('foreColor',false,t.dataset.tcolor);
   });
+  $('ttFsSel').addEventListener('change',function(){if(this.value){bdApplyFs(Number(this.value));}});
   $('ttColor').addEventListener('input',function(){
     if(bdSavedRange){var s=window.getSelection();s.removeAllRanges();s.addRange(bdSavedRange);}
     document.execCommand('foreColor',false,this.value);
   });
-  $('bdHelp').addEventListener('click',function(){toast('滾輪縮放｜拖曳空白平移｜Shift+拖曳框選｜雙擊編輯文字/換色｜選取後按 Delete 刪除｜拉四角調大小');});
+  window.addEventListener('paste',function(e){
+    if(currentTab!=='board'||bdEditing)return;
+    var ae=document.activeElement;
+    if(ae&&(['INPUT','TEXTAREA','SELECT'].indexOf(ae.tagName)>=0||ae.isContentEditable))return;
+    var cItems=(e.clipboardData&&e.clipboardData.items)||[];
+    var k=0,found=false;
+    for(var i=0;i<cItems.length;i++){
+      if(cItems[i].type&&cItems[i].type.indexOf('image')===0){
+        var f=cItems[i].getAsFile();
+        if(f){
+          found=true;
+          (function(off){
+            compressImage(f,function(url){
+              var probe=new Image();
+              probe.onload=function(){
+                var c=bdCenter();var dw=280,dh=dw*probe.height/probe.width;
+                bdAdd({type:'image',src:url,x:c.x-dw/2+off,y:c.y-dh/2+off,w:dw,h:dh});
+              };
+              probe.src=url;
+            });
+          })(k*26);k++;
+        }
+      }
+    }
+    if(found){e.preventDefault();toast('已貼上圖片');}
+  });
+  $('bdHelp').addEventListener('click',function(){toast('滾輪縮放｜拖曳空白平移｜Shift+拖曳框選｜雙擊編輯文字/換色｜Delete 刪除｜拉四角調大小｜Ctrl+V 直接貼上截圖');});
   $('bdLibSearch').addEventListener('input',renderDrawer);
   $('bdDrawerList').addEventListener('click',function(e){
     var ph=e.target.closest('[data-per]');
@@ -1634,9 +1703,9 @@ function wireBoardStatic(){
     b.addEventListener('click',function(){var it=bdSel.length===1?bdById(bdSel[0]):null;if(it&&it.type==='note'){it.color=cl;var d=bdEl(bdSel[0]);if(d)d.style.background=cl;bdWrite(bdSel[0]);}});
     $('noteColors').appendChild(b);
   });
-  $('btnFsUp').addEventListener('click',function(){bdFsAdj(1.2);});
-  $('btnFsDown').addEventListener('click',function(){bdFsAdj(1/1.2);});
-  function bdFsAdj(f){var id=bdSel.length===1?bdSel[0]:null;if(!id)return;var it=bdById(id);it.fs=Math.max(10,Math.min(120,Math.round(num(it.fs)*f)));var d=bdEl(id);if(d)d.style.fontSize=it.fs+'px';bdWrite(id);}
+  $('btnFsUp').addEventListener('click',function(){bdScaleFs(1.2);});
+  $('btnFsDown').addEventListener('click',function(){bdScaleFs(1/1.2);});
+  $('fsSel').addEventListener('change',function(){if(this.value)bdApplyFs(Number(this.value));});
   $('btnDel').addEventListener('click',bdDelSel);
   $('btnFront').addEventListener('click',function(){bdSel.forEach(function(id){bdById(id).z=++bdZ;});bdWriteMany(bdSel);renderBoard();});
   $('btnBack').addEventListener('click',function(){var ids=Object.keys(bdItems);var m=ids.length?Math.min.apply(null,ids.map(function(k){return num(bdItems[k].z);})):0;bdSel.forEach(function(id,k){bdById(id).z=m-1-k;});bdWriteMany(bdSel);renderBoard();});
