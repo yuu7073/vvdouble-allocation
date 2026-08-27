@@ -61,6 +61,24 @@ header{position:sticky;top:0;z-index:50;background:var(--card);box-shadow:0 1px 
 .tbl input:focus,.tbl select:focus{outline:2px solid var(--blue);border-color:var(--blue)}
 .tscroll{overflow-x:auto}
 .diff-warn{color:var(--orange);font-weight:800}
+.blk{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
+.blk.ex{border-color:#F2C9A8;background:#FFFBF7}
+.blk .bh{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.blk .bt{font-size:13px;font-weight:800}
+.blk .bn{font-size:24px;font-weight:800;line-height:1.2}
+.blk .bs{font-size:12px;color:var(--muted);margin-top:2px}
+.blk .bp{font-size:12px;color:var(--muted);margin-top:6px;display:flex;justify-content:space-between;gap:10px}
+.sumbar{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px}
+.sumbar .bp{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:16px;align-items:baseline;margin-top:6px}
+.sumrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sumbig{font-size:22px;font-weight:800}
+.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;margin-top:8px;border:1px solid var(--line)}
+.nobar{margin-top:8px;height:12px;border-radius:6px;border:1px dashed var(--line);background:repeating-linear-gradient(45deg,#F5F7FB,#F5F7FB 6px,#E9EDF5 6px,#E9EDF5 12px)}
+.blk.ex .nobar{border-color:#E3B98F;background:repeating-linear-gradient(45deg,#FFF3E8,#FFF3E8 6px,#FDE7D4 6px,#FDE7D4 12px)}
+.chip.excl{border-color:var(--orange);color:var(--orange);font-weight:700}
+.chip.excl.active{background:var(--orange);border-color:var(--orange);color:#fff}
+.badge-excl{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:10px;background:var(--orange-light);color:var(--orange);vertical-align:middle}
+.badge-seq{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:10px;background:var(--blue-light);color:var(--blue-dark);vertical-align:middle}
 .diff-ok{color:var(--ok);font-weight:700}
 .form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 @media(max-width:900px){.form-grid{grid-template-columns:repeat(2,1fr)}}
@@ -306,6 +324,7 @@ hidden,[hidden]{display:none !important}
 
       <div class="sec-title">訂貨明細 × 配貨量（顏色 / 尺寸 × 各店＋官網）</div>
       <p class="hint">「訂購數」＝跟廠商下單的數量；右邊填各店與官網配貨。差異欄＝訂購數 − 已配數（正數表示還有備貨留倉，負數表示配超過）。</p>
+      <div id="exclHint" hidden style="background:var(--orange-light);border-left:4px solid var(--orange);border-radius:0 8px 8px 0;padding:8px 12px;font-size:13px;font-weight:700;color:var(--orange);margin-bottom:8px">門市獨賣：官網欄位已鎖定，全部配到門市</div>
       <div class="tscroll"><table class="tbl" id="detailTbl">
         <thead id="detailHead"></thead>
         <tbody id="detailBody"></tbody>
@@ -521,9 +540,22 @@ function twd(rmb){return Math.round(num(rmb)*RATE());}
 function ntStr(rmb){return 'NT$ '+fmt(twd(rmb));}
 function cnStr(rmb){return '\uFFE5'+fmt(Math.round(num(rmb)));}
 function groupOf(cat){var g='';(CONFIG.categories||[]).forEach(function(c){if((c.items||[]).indexOf(cat)>=0)g=c.name;});return g;}
-function periodsOfMonth(m){return Object.keys(PERIODS).filter(function(id){return PERIODS[id].month===m;}).sort(function(a,b){return (PERIODS[a].date||'')<(PERIODS[b].date||'')?-1:1;});}
+function periodsOfMonth(m){return Object.keys(PERIODS).filter(function(id){return PERIODS[id].month===m;}).sort(function(a,b){
+  var ea=(PERIODS[a].kind==='excl')?1:0,eb=(PERIODS[b].kind==='excl')?1:0;
+  if(ea!==eb)return ea-eb;
+  return (PERIODS[a].date||'')<(PERIODS[b].date||'')?-1:1;
+});}
 function monthList(){var s={};Object.keys(PERIODS).forEach(function(id){if(PERIODS[id].month)s[PERIODS[id].month]=1;});Object.keys(MONTHS).forEach(function(m){s[m]=1;});return Object.keys(s).sort().reverse();}
 function itemsOfPeriods(pids){return Object.keys(ITEMS).filter(function(id){return pids.indexOf(ITEMS[id].periodId)>=0;});}
+function isExcl(pid){return (PERIODS[pid]||{}).kind==='excl';}
+function periodSeq(pid){
+  var p=PERIODS[pid];if(!p)return '';
+  if(p.kind==='excl')return '門市獨賣';
+  var mains=periodsOfMonth(p.month).filter(function(x){return !isExcl(x);});
+  var i=mains.indexOf(pid);
+  if(i<0)return '';
+  return ['第一檔','第二檔','第三檔','第四檔'][i]||('第'+(i+1)+'檔');
+}
 function itemOrderTotal(it){var t=0;arr(it.rows).forEach(function(r){t+=num(r.orderQty);});return t;}
 function rowAllocCfg(r){var t=num(r.web);CONFIG.stores.forEach(function(s){t+=num(r.alloc&&r.alloc[s]);});return t;}
 function itemAllocTotalCfg(it){var t=0;arr(it.rows).forEach(function(r){t+=rowAllocCfg(r);});return t;}
@@ -544,8 +576,9 @@ function seedDemo(){
   MOCK={allocation:{config:cfg,
     months:{'2026-08':{target:4500}},
     periods:{
-      p1:{month:'2026-08',name:'8/11檔',date:'2026-08-11',theme:'夏末清爽',colorRatio:'粉 藍 黃 橙',elements:'格紋 流蘇 大口袋',stockReserve:320},
-      p2:{month:'2026-08',name:'8/25檔',date:'2026-08-25',theme:'初秋層次',colorRatio:'米 藏青 橙',elements:'利落剪裁 大口袋',stockReserve:280}
+      p1:{month:'2026-08',name:'8/11檔',date:'2026-08-11',target:2000,theme:'夏末清爽',colorRatio:'粉 藍 黃 橙',elements:'格紋 流蘇 大口袋',stockReserve:320},
+      p2:{month:'2026-08',name:'8/25檔',date:'2026-08-25',target:1500,theme:'初秋層次',colorRatio:'米 藏青 橙',elements:'利落剪裁 大口袋',stockReserve:280},
+      p3:{month:'2026-08',name:'8月門市獨賣',kind:'excl',date:'',theme:'門市機動補貨',colorRatio:'',elements:''}
     },
     items:{}
   }};
@@ -560,7 +593,8 @@ function seedDemo(){
     ['p1','TW1013','連衣裙','黃',95],
     ['p2','TW1014','T恤','灰',130],['p2','TW1015','襯衫','藍',100],['p2','TW1016','衛衣','白',140],
     ['p2','TW1017','開衫','米',80],['p2','TW1018','風衣','藏青',75],['p2','TW1019','休閒褲','灰',95],
-    ['p2','TW1020','短褲','藍',70],['p2','TW1021','連衣裙','粉',105],['p2','TW1022','套裝','黑',65]
+    ['p2','TW1020','短褲','藍',70],['p2','TW1021','連衣裙','粉',105],['p2','TW1022','套裝','黑',65],
+    ['p3','TW1080','T恤','白',120],['p3','TW1081','襯衫','米',90],['p3','TW1082','半裙','黑',70]
   ];
   list.forEach(function(d,idx){
     var pid=d[0],no=d[1],cat=d[2],color=d[3],oq=d[4];
@@ -569,7 +603,7 @@ function seedDemo(){
     var rows=splits.map(function(sp){
       var so=Math.round(oq*sp[1]);
       var alloc={};cfg.stores.forEach(function(s,i){alloc[s]=Math.round(so*pcts[i]);});
-      return {color:color,size:sp[0],orderQty:so,alloc:alloc,web:Math.round(so*0.22),
+      return {color:color,size:sp[0],orderQty:so,alloc:alloc,web:(pid==='p3'?0:Math.round(so*0.22)),
         colorType:cfg.baseColors.indexOf(color)>=0?'base':'accent'};
     });
     MOCK.allocation.items['m'+idx]={periodId:pid,styleNo:no,styleType:'C',category:cat,categoryGroup:group,
@@ -719,6 +753,7 @@ function wireStatic(){
   wireSettingsStatic();
   wireBoardStatic();
   $('f_price').addEventListener('input',updatePriceTwd);
+  $('f_period').addEventListener('change',function(){renderDetail();});
   $('saveItem').addEventListener('click',saveItem);
   $('cancelEdit').addEventListener('click',function(){resetForm();toast('已清空表單');});
   document.querySelectorAll('.rt-bar [data-cmd]').forEach(function(b){b.addEventListener('mousedown',function(e){e.preventDefault();$('f_notes').focus();document.execCommand(b.dataset.cmd,false,null);});});
@@ -794,7 +829,7 @@ function fillPeriodSelect(){
   var sel=$('f_period');if(!sel||!CONFIG)return;var cur=sel.value;
   var html='<option value="">— 選擇檔期 —</option>';
   monthList().forEach(function(m){
-    periodsOfMonth(m).forEach(function(pid){var p=PERIODS[pid];html+='<option value="'+pid+'">'+esc(m+'｜'+(p.name||p.date||''))+'</option>';});
+    periodsOfMonth(m).forEach(function(pid){var p=PERIODS[pid];html+='<option value="'+pid+'">'+esc(m+'｜'+(p.name||p.date||'')+(isExcl(pid)?'（門市獨賣）':''))+'</option>';});
   });
   sel.innerHTML=html;if(cur)sel.value=cur;
   if($('f_onShelfSel'))fillOnShelfSelect();
@@ -823,10 +858,14 @@ function sizeOptions(sel){
   if(sel&&CONFIG.sizes.indexOf(sel)<0)h+='<option selected>'+esc(sel)+'</option>';
   return h;
 }
+function formIsExcl(){var sel=$('f_period');return !!(sel&&sel.value&&isExcl(sel.value));}
 function renderDetail(){
+  var exclForm=formIsExcl();
+  if(exclForm)formRows.forEach(function(r){r.web=0;});
+  var eh=$('exclHint');if(eh)eh.hidden=!exclForm;
   var h='<tr><th>顏色</th><th>尺寸</th><th style="background:var(--blue-dark)">訂購數</th>';
   CONFIG.stores.forEach(function(s){h+='<th>'+esc(s)+'</th>';});
-  h+='<th style="background:var(--orange)">官網</th><th>已配</th><th>差異</th><th></th></tr>';
+  h+='<th style="background:'+(exclForm?'#9AA6BD':'var(--orange)')+'">官網</th><th>已配</th><th>差異</th><th></th></tr>';
   $('detailHead').innerHTML=h;
   var b='';
   formRows.forEach(function(r,i){
@@ -834,7 +873,7 @@ function renderDetail(){
     b+='<td style="min-width:64px"><select data-i="'+i+'" data-f="size">'+sizeOptions(r.size)+'</select></td>';
     b+='<td><input type="number" min="0" data-i="'+i+'" data-f="orderQty" value="'+(r.orderQty||'')+'"></td>';
     CONFIG.stores.forEach(function(s){b+='<td><input type="number" min="0" data-i="'+i+'" data-store="'+esc(s)+'" value="'+((r.alloc&&r.alloc[s])||'')+'"></td>';});
-    b+='<td><input type="number" min="0" data-i="'+i+'" data-f="web" value="'+(r.web||'')+'"></td>';
+    b+=exclForm?'<td class="web-off" style="background:#EFF1F5;color:#B4BCCB">—</td>':('<td><input type="number" min="0" data-i="'+i+'" data-f="web" value="'+(r.web||'')+'"></td>');
     b+='<td id="rsum'+i+'"></td><td id="rdiff'+i+'"></td>';
     b+='<td><button class="btn btn-ghost btn-sm" data-del="'+i+'">✕</button></td></tr>';
   });
@@ -856,7 +895,7 @@ function updateDetailTotals(){
   var diff=orderT-allocT;
   var f='<tr><td colspan="2">合計</td><td>'+fmt(orderT)+'</td>';
   CONFIG.stores.forEach(function(s){f+='<td>'+fmt(storeT[s])+'</td>';});
-  f+='<td>'+fmt(webT)+'</td><td>'+fmt(allocT)+'</td><td class="'+(diff<0?'diff-warn':'')+'">'+fmt(diff)+'</td><td></td></tr>';
+  f+='<td>'+(formIsExcl()?'—':fmt(webT))+'</td><td>'+fmt(allocT)+'</td><td class="'+(diff<0?'diff-warn':'')+'">'+fmt(diff)+'</td><td></td></tr>';
   $('detailFoot').innerHTML=f;
 }
 function onDetailEdit(e){
@@ -986,6 +1025,7 @@ function renderOverview(){
 
   var totalOrder=0,allocT=0,webT=0,storeT={},colorPieces={},basePieces=0,accentPieces=0;
   var totalAmt=0,vendorStat={},sizePieces={};
+  var exAlloc=0,exStoreT=0;
   var groupStat={};(CONFIG.categories||[]).forEach(function(g){groupStat[g.name]={styles:0,pieces:0,pct:num(g.pct)};});
   CONFIG.stores.forEach(function(s){storeT[s]=0;});
   ids.forEach(function(id){
@@ -997,6 +1037,7 @@ function renderOverview(){
     if(!vendorStat[vd])vendorStat[vd]={styles:0,pieces:0,amount:0};
     vendorStat[vd].styles++;
     var price=num(it.price);
+    var exclItem=isExcl(it.periodId);
     arr(it.rows).forEach(function(r){
       var oq=num(r.orderQty);
       totalOrder+=oq;groupStat[g].pieces+=oq;
@@ -1005,8 +1046,9 @@ function renderOverview(){
       var c=r.color||'未填';
       colorPieces[c]=(colorPieces[c]||0)+oq;
       if(colorType(c)==='base')basePieces+=oq;else accentPieces+=oq;
-      CONFIG.stores.forEach(function(s){var v=num(r.alloc&&r.alloc[s]);storeT[s]+=v;allocT+=v;});
+      CONFIG.stores.forEach(function(s){var v=num(r.alloc&&r.alloc[s]);storeT[s]+=v;allocT+=v;if(exclItem)exStoreT+=v;});
       webT+=num(r.web);
+      if(exclItem)exAlloc+=rowAllocCfg(r);
     });
   });
   allocT+=webT;
@@ -1018,7 +1060,7 @@ function renderOverview(){
     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
     '<select id="ov_month" class="mini-input" style="width:auto;font-weight:700">'+ms.map(function(m){return '<option'+(m===ovMonth?' selected':'')+'>'+m+'</option>';}).join('')+'</select>'+
     '<div class="chips"><button class="chip'+(ovPeriod==='all'?' active':'')+'" data-ovp="all">整月</button>'+
-    pids.map(function(pid){var p=PERIODS[pid];return '<button class="chip'+(ovPeriod===pid?' active':'')+'" data-ovp="'+pid+'">'+esc(p.name||p.date||'')+'</button>';}).join('')+
+    pids.map(function(pid){var p=PERIODS[pid];return '<button class="chip'+(isExcl(pid)?' excl':'')+(ovPeriod===pid?' active':'')+'" data-ovp="'+pid+'">'+esc(p.name||p.date||'')+'</button>';}).join('')+
     '</div>'+(isAdmin()?'<button class="btn btn-ghost" id="exp_btn" style="margin-left:auto">匯出 Excel</button>':'')+'</div>';
   if(ovPeriod!=='all'){var pp=PERIODS[ovPeriod];html+='<div class="hint" style="margin-top:10px">上架日 '+esc(pp.date||'—')+'｜系列主題：'+esc(pp.theme||'—')+'｜色彩占比：'+esc(pp.colorRatio||'—')+'｜系列元素：'+esc(pp.elements||'—')+'</div>';}
   html+='</div>';
@@ -1036,13 +1078,70 @@ function renderOverview(){
     })()+
     (isAdmin()?'<div class="stat"><div class="lbl">下單總金額（台幣）</div><div class="num hl">'+ntStr(totalAmt)+'</div><div class="note">'+cnStr(totalAmt)+' × 匯率 '+RATE()+'</div></div>':'')+
     '<div class="stat"><div class="lbl">已配 / 未配</div><div class="num">'+fmt(allocT)+'<small style="font-size:14px;color:var(--muted)"> / '+fmt(unalloc)+'</small></div><div class="note">'+(unalloc<0?'<span class="diff-warn">配貨超過訂購量！</span>':'未配＝已下單但未分到店/官網')+'</div></div>'+
-    (isAdmin()?'<div class="stat" style="grid-column:span 2"><div class="lbl">官網 : 門市（七間）配貨佔比</div>'+
-    (allocT>0
-      ?'<div class="num"><span class="hl">'+Math.round(webT/allocT*100)+'%</span><small style="font-size:15px;color:var(--muted)"> 官網</small>　'+(100-Math.round(webT/allocT*100))+'%<small style="font-size:15px;color:var(--muted)"> 門市</small></div>'+
-       '<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:6px"><div style="background:var(--orange);width:'+(webT/allocT*100)+'%"></div><div style="background:var(--blue);flex:1"></div></div>'
-      :'<div class="num">—</div>')+
-    '<div class="note">官網 '+fmt(webT)+' 件｜門市合計 '+fmt(allocT-webT)+' 件</div></div>':'')+
+    (isAdmin()?(function(){
+      var mAlloc=allocT-exAlloc,mWeb=webT,mStore=mAlloc-mWeb;
+      var pctW=mAlloc>0?Math.round(mWeb/mAlloc*100):0;
+      return '<div class="stat" style="grid-column:span 2"><div class="lbl">官網 : 門市（七間）配貨佔比</div>'+
+      (mAlloc>0
+        ?'<div class="num"><span class="hl">'+pctW+'%</span><small style="font-size:15px;color:var(--muted)"> 官網</small>　'+(100-pctW)+'%<small style="font-size:15px;color:var(--muted)"> 門市</small></div>'+
+         '<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:6px"><div style="background:var(--orange);width:'+(mWeb/mAlloc*100)+'%"></div><div style="background:var(--blue);flex:1"></div></div>'
+        :'<div class="num">—</div>')+
+      '<div class="note">官網 '+fmt(mWeb)+' 件｜門市合計 '+fmt(mStore)+' 件'+(exAlloc>0?'　<b style="color:var(--orange)">（不含門市獨賣 '+fmt(exAlloc)+' 件）</b>':'')+'</div></div>';})():'')+
     '</div>';
+
+  if(ovPeriod==='all'&&pids.length){
+    var blocks=pids.map(function(pid){
+      var pp=PERIODS[pid],ex=isExcl(pid),tg=num(pp.target),pc=0;
+      itemsOfPeriods([pid]).forEach(function(id){pc+=itemOrderTotal(ITEMS[id]);});
+      return {pid:pid,p:pp,ex:ex,target:tg,pieces:pc};
+    });
+    var sumPieces=0,sumMainTarget=0,hasExcl=false;
+    blocks.forEach(function(b){sumPieces+=b.pieces;if(b.ex)hasExcl=true;else sumMainTarget+=b.target;});
+    var mTarget=num(MONTHS[ovMonth]&&MONTHS[ovMonth].target);
+    var mDone=mTarget>0?sumPieces/mTarget*100:0;
+    var PAL=['var(--blue)','var(--blue-dark)','#5B8BD0','#27408B'];
+    var h2='<div class="card"><h3>本月結構 <span class="sub">'+
+      blocks.map(function(b){return esc(b.p.name||b.p.date||'');}).join(' ＋ ')+
+      '　件數合計對月目標</span></h3>';
+    h2+='<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">';
+    blocks.forEach(function(b){
+      var pct=b.target>0?b.pieces/b.target*100:0;
+      h2+='<div class="blk'+(b.ex?' ex':'')+'">'+
+        '<div class="bh"><span class="bt">'+esc(b.p.name||b.p.date||'')+'</span><span class="'+(b.ex?'badge-excl':'badge-seq')+'">'+esc(periodSeq(b.pid))+'</span></div>'+
+        '<div class="bn">'+fmt(b.pieces)+' <span style="font-size:14px;font-weight:400;color:var(--muted)">件</span></div>';
+      if(b.target>0){
+        h2+='<div class="bs">目標 '+fmt(b.target)+' 件</div>'+
+          '<div class="bar-track" style="margin-top:8px"><div class="bar-fill'+(pct>=100?'':' orange')+'" style="width:'+Math.min(100,pct)+'%"></div></div>'+
+          '<div class="bp"><span'+(pct>=100?' style="color:var(--ok);font-weight:800"':'')+'>達成 '+(Math.round(pct*10)/10)+'%</span><span>'+(pct>=100?'已超標 '+fmt(b.pieces-b.target)+' 件':'還差 '+fmt(b.target-b.pieces)+' 件')+'</span></div>';
+      }else{
+        h2+='<div class="bs">無目標'+(b.ex?'　<span class="badge-excl" style="font-size:10px">測試中</span>':'')+'</div>'+
+          '<div class="nobar"></div>'+
+          '<div class="bp"><span>佔本月下單 '+(sumPieces>0?Math.round(b.pieces/sumPieces*1000)/10:0)+'%</span><span>直接累積進月目標</span></div>';
+      }
+      h2+='</div>';
+    });
+    h2+='</div>';
+    h2+='<div class="sumbar"><div class="sumrow"><div><span class="hint">'+blocks.length+' 塊合計下單</span>'+
+      '<span class="sumbig" style="margin-left:8px">'+fmt(sumPieces)+'</span>'+
+      '<span class="hint"> / 月目標 '+(mTarget>0?fmt(mTarget)+' 件':'未設定')+'</span></div>'+
+      '<div class="sumbig" style="color:'+(mDone>=100?'var(--ok)':'var(--orange)')+'">'+(mTarget>0?(Math.round(mDone*10)/10)+'%':'—')+'</div></div>';
+    if(mTarget>0){
+      h2+='<div class="stack">';
+      blocks.forEach(function(b,i){
+        var w=Math.max(0,Math.min(100,b.pieces/mTarget*100));
+        h2+='<div style="background:'+(b.ex?'var(--orange)':PAL[i%PAL.length])+';width:'+w+'%"></div>';
+      });
+      h2+='<div style="background:#EEF1F7;flex:1"></div></div>';
+      h2+='<div class="bp"><span>'+blocks.map(function(b,i){
+        return '<span style="color:'+(b.ex?'var(--orange)':PAL[i%PAL.length])+';font-weight:800">■</span> '+esc(b.p.name||'')+' '+fmt(b.pieces);
+      }).join('　')+'</span><span>'+(sumPieces>=mTarget?'已超標 '+fmt(sumPieces-mTarget)+' 件':'距月目標還差 '+fmt(mTarget-sumPieces)+' 件')+'</span></div>';
+      if(sumMainTarget>0)h2+='<div class="hint" style="margin-top:8px">上架檔目標合計 <b>'+fmt(sumMainTarget)+'</b> 件｜月目標 <b>'+fmt(mTarget)+'</b> 件'+
+        (mTarget!==sumMainTarget?'｜差額 <b style="color:var(--orange)">'+fmt(Math.abs(mTarget-sumMainTarget))+'</b> 件'+(hasExcl?'由門市獨賣補上（獨賣無目標，不列入檢查）':''):'')+'</div>';
+    }
+    h2+='</div></div>';
+    html+=h2;
+  }
+
 
   if(isAdmin()){
   var maxStore=1;CONFIG.stores.forEach(function(s){if(storeT[s]>maxStore)maxStore=storeT[s];});if(webT>maxStore)maxStore=webT;
@@ -1185,9 +1284,10 @@ function renderPeriods(){
   var el=$('page-periods');
   var html=!isAdmin()?'':'<div class="card"><h3 id="pFormTitle">'+(editPeriodId?'編輯檔期':'新增檔期')+'</h3><div class="form-grid">'+
     '<div class="fld"><label>月份 *</label><input id="p_month" type="month"></div>'+
+    '<div class="fld"><label>檔期類型 *</label><select id="p_kind"><option value="">一般檔期（上架檔）</option><option value="excl">門市獨賣</option></select></div>'+
     '<div class="fld"><label>檔期名稱 *</label><input id="p_name" placeholder="例：8/25檔"></div>'+
     '<div class="fld"><label>上架日期</label><input id="p_date" type="date"></div>'+
-    '<div class="fld"><label>檔期下單目標（件）</label><input id="p_target" type="number" min="0" placeholder="例：4500"></div>'+
+    '<div class="fld"><label>檔期下單目標（件）</label><input id="p_target" type="number" min="0" placeholder="例：4500（獨賣可留空）"></div>'+
     '<div class="fld"><label>系列主題</label><input id="p_theme"></div>'+
     '<div class="fld"><label>色彩占比</label><input id="p_colorRatio" placeholder="例：粉 藍 黃 橙"></div>'+
     '<div class="fld"><label>系列元素</label><input id="p_elements" placeholder="例：格紋 流蘇 大口袋"></div>'+
@@ -1203,17 +1303,22 @@ function renderPeriods(){
     html+='<div class="card month-card"><div class="mth"><div class="mname">'+m+'</div>'+
       (isAdmin()?'<div>月下單目標 <input class="mini-input" data-mtarget="'+m+'" value="'+(target||'')+'"> 件</div>':'<div>月下單目標 '+(target?fmt(target):'未設定')+' 件</div>')+
       '<div>已下單 <b style="color:var(--orange)">'+fmt(mPieces)+'</b> 件'+(pct!=null?'（'+pct+'%）':'')+'</div>'+
-      (function(){var tsum=0;pids.forEach(function(pid){tsum+=num(PERIODS[pid].target);});
+      (function(){
+        var tsum=0,hasExcl=false;
+        pids.forEach(function(pid){if(isExcl(pid))hasExcl=true;else tsum+=num(PERIODS[pid].target);});
         if(!tsum&&!target)return '';
         var ok=(!target||tsum===target);
-        return '<div>各檔目標合計 '+(ok?fmt(tsum):'<b style="color:var(--orange)">'+fmt(tsum)+'</b>')+' 件'+(target&&!ok?'（與月目標差 '+fmt(target-tsum)+' 件）':'')+'</div>';})()+
+        return '<div>上架檔目標合計 '+(ok?fmt(tsum):'<b style="color:var(--orange)">'+fmt(tsum)+'</b>')+' 件'+
+          (target&&!ok?'（與月目標差 '+fmt(target-tsum)+' 件'+(hasExcl?'，由門市獨賣補上':'')+'）':'')+
+          (hasExcl?'<span class="hint">（獨賣無目標）</span>':'')+'</div>';})()+
       '</div>';
     pids.forEach(function(pid){
       var p=PERIODS[pid];
       var pi=itemsOfPeriods([pid]);var pieces=0,aq=0,wq=0;
       pi.forEach(function(id){pieces+=itemOrderTotal(ITEMS[id]);aq+=itemAllocTotalCfg(ITEMS[id]);arr(ITEMS[id].rows).forEach(function(r){wq+=num(r.web);});});
-      html+='<div class="pd-row"><div><div class="pn">'+esc(p.name||'')+'　<span class="hint">'+esc(p.date||'')+'</span></div>'+
-        '<div class="pm">主題：'+esc(p.theme||'—')+'｜色彩：'+esc(p.colorRatio||'—')+'｜元素：'+esc(p.elements||'—')+'<br>檔期目標 '+(isAdmin()?'<input class="mini-input" data-ptarget="'+pid+'" value="'+(p.target||'')+'">':'<b>'+(p.target?fmt(p.target):'未設定')+'</b>')+' 件｜下單 '+fmt(pieces)+' 件（'+(num(p.target)>0?Math.round(pieces/num(p.target)*100)+'%':'—')+'）｜已配 '+fmt(aq)+' 件｜官網 <b>'+fmt(wq)+'</b> 件（'+(aq>0?Math.round(wq/aq*100)+'%':'—')+'）</div></div>'+
+      var ex=isExcl(pid);
+      html+='<div class="pd-row"'+(ex?' style="background:#FFFBF7;border-radius:8px;padding-left:8px;padding-right:8px"':'')+'><div><div class="pn">'+esc(p.name||'')+' <span class="'+(ex?'badge-excl':'badge-seq')+'">'+esc(periodSeq(pid))+'</span>　<span class="hint">'+esc(p.date||'')+'</span></div>'+
+        '<div class="pm">主題：'+esc(p.theme||'—')+'｜色彩：'+esc(p.colorRatio||'—')+'｜元素：'+esc(p.elements||'—')+'<br>檔期目標 '+(isAdmin()?'<input class="mini-input" data-ptarget="'+pid+'" value="'+(p.target||'')+'"'+(ex?' placeholder="無目標"':'')+'>':'<b>'+(p.target?fmt(p.target):'無目標')+'</b>')+' 件'+(ex&&!num(p.target)?'<span class="hint">（測試中，無目標）</span>':'')+'｜下單 <b'+(ex?' style="color:var(--orange)"':'')+'>'+fmt(pieces)+'</b> 件'+(num(p.target)>0?'（'+Math.round(pieces/num(p.target)*100)+'%）':'')+'｜已配 '+fmt(aq)+' 件｜'+(ex?'<span style="color:var(--orange);font-weight:700">官網 不適用</span>':'官網 <b>'+fmt(wq)+'</b> 件（'+(aq>0?Math.round(wq/aq*100)+'%':'—')+'）')+'</div></div>'+
         (isAdmin()?'<div style="display:flex;flex-direction:column;gap:6px"><button class="btn btn-ghost btn-sm" data-pedit="'+pid+'">編輯</button><button class="btn btn-ghost btn-sm" data-pdel="'+pid+'" style="color:var(--danger)">刪除</button></div>':'')+'</div>';
     });
     html+='</div>';
@@ -1222,13 +1327,14 @@ function renderPeriods(){
   if($('p_month')&&editPeriodId&&PERIODS[editPeriodId]){
     var p=PERIODS[editPeriodId];
     $('p_month').value=p.month||todayMonth();$('p_name').value=p.name||'';$('p_date').value=p.date||'';
+    $('p_kind').value=p.kind||'';
     $('p_target').value=p.target||'';$('p_theme').value=p.theme||'';$('p_colorRatio').value=p.colorRatio||'';$('p_elements').value=p.elements||'';
     $('p_cancel').addEventListener('click',function(){editPeriodId=null;renderPeriods();});
   }else if($('p_month')){$('p_month').value=todayMonth();}
   if($('p_add'))$('p_add').addEventListener('click',function(){
     var m=$('p_month').value,n=$('p_name').value.trim();
     if(!m||!n){toast('請填月份與檔期名稱');return;}
-    var data={month:m,name:n,date:$('p_date').value,target:num($('p_target').value),theme:$('p_theme').value.trim(),colorRatio:$('p_colorRatio').value.trim(),elements:$('p_elements').value.trim()};
+    var data={month:m,name:n,kind:$('p_kind').value,date:$('p_date').value,target:num($('p_target').value),theme:$('p_theme').value.trim(),colorRatio:$('p_colorRatio').value.trim(),elements:$('p_elements').value.trim()};
     var needMonth=!MONTHS[m];
     if(editPeriodId){dbUpdate(ROOT+'/periods/'+editPeriodId,data);toast('已更新檔期');editPeriodId=null;}
     else{data.createdAt=Date.now();dbPush(ROOT+'/periods',data);toast('已建立檔期：'+n);}
