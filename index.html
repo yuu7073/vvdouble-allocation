@@ -200,6 +200,11 @@ a{color:var(--blue)}
 #bdTabAdd:hover{border-color:var(--blue);color:var(--blue)}
 .bd-drop{width:3px;background:var(--blue);border-radius:2px;margin:8px 0 0;flex:none;align-self:stretch}
 .barscroll{max-height:250px;overflow-y:auto;padding-right:6px}
+.tblscroll{max-height:320px;overflow-y:auto}
+.tblscroll thead th{position:sticky;top:0;z-index:2}
+.tblscroll::-webkit-scrollbar{width:8px}
+.tblscroll::-webkit-scrollbar-thumb{background:#C6D0E2;border-radius:4px}
+.tblscroll::-webkit-scrollbar-track{background:transparent}
 .barscroll::-webkit-scrollbar{width:8px}
 .barscroll::-webkit-scrollbar-thumb{background:#C6D0E2;border-radius:4px}
 .barscroll::-webkit-scrollbar-track{background:transparent}
@@ -1276,6 +1281,59 @@ function renderOverview(){
   html+='</div>';
   }
 
+  (function(){
+    var RK_PER=10;
+    var rows=ids.map(function(id){
+      var it=ITEMS[id];
+      var bySize={},tot=0;
+      arr(it.rows).forEach(function(r){
+        var sz=r.size||'未填',q=num(r.orderQty);
+        bySize[sz]=(bySize[sz]||0)+q;tot+=q;
+      });
+      var pr=num(it.price);
+      return {id:id,no:it.styleNo||'',bySize:bySize,tot:tot,price:pr,amt:tot*pr};
+    }).filter(function(r){return r.tot>0||r.price>0;});
+    if(!rows.length)return;
+    if(rkSort==='amt')rows.sort(function(a,b){return b.amt-a.amt;});
+    else if(rkSort==='price')rows.sort(function(a,b){return b.price-a.price;});
+    else rows.sort(function(a,b){return b.tot-a.tot;});
+    var pages=Math.max(1,Math.ceil(rows.length/RK_PER));
+    if(rkPage>pages)rkPage=1;
+    var from=(rkPage-1)*RK_PER,page=rows.slice(from,from+RK_PER);
+    var szCols=CONFIG.sizes.slice();
+    Object.keys(sizePieces).forEach(function(sz){if(szCols.indexOf(sz)<0)szCols.push(sz);});
+    var showMoney=isAdmin();
+
+    html+='<div class="card"><h3>款式下單排行 <span class="sub">'+esc(ovMonth+(ovPeriod==='all'?' 整月':'｜'+(((PERIODS[ovPeriod]||{}).name)||'')))+'</span></h3>';
+    html+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><span class="hint">排序依據</span><div class="chips">'+
+      '<button class="chip'+(rkSort==='qty'?' active':'')+'" data-rks="qty">下單件數</button>'+
+      (showMoney?'<button class="chip'+(rkSort==='amt'?' active':'')+'" data-rks="amt">總成本</button><button class="chip'+(rkSort==='price'?' active':'')+'" data-rks="price">單價</button>':'')+
+      '</div><span class="hint" style="margin-left:auto">共 '+rows.length+' 款，每頁 '+RK_PER+' 款</span></div>';
+    html+='<div class="tscroll"><table class="tbl"><thead><tr><th>#</th><th>貨號</th>'+
+      szCols.map(function(sz){return '<th style="background:var(--blue-dark)">'+esc(sz)+'</th>';}).join('')+
+      '<th>合計件數</th>'+(showMoney?'<th style="background:#3B5C8F">成本</th><th style="background:#3B5C8F">總成本</th>':'')+'</tr></thead><tbody>';
+    page.forEach(function(r,i){
+      var rank=from+i+1;
+      html+='<tr><td class="'+(rank<=3?'':'')+'" style="font-weight:800;color:'+(rank<=3?'var(--orange)':'var(--muted)')+'">'+rank+'</td>'+
+        '<td><span class="rk-no" data-rkno="'+esc(r.id)+'">'+esc(r.no)+'</span></td>'+
+        szCols.map(function(sz){return '<td'+(r.bySize[sz]?'':' class="rk-zero"')+'>'+(r.bySize[sz]?fmt(r.bySize[sz]):'—')+'</td>';}).join('')+
+        '<td style="font-weight:800">'+fmt(r.tot)+'</td>'+
+        (showMoney?'<td>'+ntStr(r.price)+' <span style="color:var(--muted)">('+cnStr(r.price)+')</span></td>'+
+          '<td style="font-weight:800;color:var(--blue-dark)">'+ntStr(r.amt)+'</td>':'')+
+        '</tr>';
+    });
+    html+='</tbody></table></div>';
+    if(pages>1){
+      html+='<div style="display:flex;gap:6px;align-items:center;justify-content:center;margin-top:12px;flex-wrap:wrap">';
+      html+='<button class="pg" data-rkp="'+(rkPage-1)+'"'+(rkPage<=1?' disabled':'')+'>\u2039 上一頁</button>';
+      for(var pnum=1;pnum<=pages;pnum++)html+='<button class="pg'+(pnum===rkPage?' active':'')+'" data-rkp="'+pnum+'">'+pnum+'</button>';
+      html+='<button class="pg" data-rkp="'+(rkPage+1)+'"'+(rkPage>=pages?' disabled':'')+'>下一頁 \u203A</button>';
+      html+='</div>';
+    }
+    html+='<div class="hint" style="margin-top:10px;text-align:center">第 '+(from+1)+'\u2013'+Math.min(from+RK_PER,rows.length)+' 款，共 '+rows.length+' 款\u3000點貨號可看款式圖</div>';
+    html+='</div>';
+  })();
+
   html+='<div class="grid g2">';
   html+='<div class="card" style="margin-bottom:0"><h3>顏色分布 <span class="sub">依訂購件數</span></h3>';
   if(totalOrder>0){
@@ -1325,7 +1383,8 @@ function renderOverview(){
   html+='<div class="card" style="margin-bottom:0"><h3>廠商彙總 <span class="sub">本範圍下單統計</span></h3>';
   var vKeys=Object.keys(vendorStat).sort(function(a,b){return vendorStat[b].amount-vendorStat[a].amount;});
   if(vKeys.length){
-    html+='<div class="tscroll"><table class="tbl"><thead><tr><th>廠商</th><th>款數</th><th>件數</th><th>金額（台幣）</th><th>金額（人民幣）</th><th>金額占比</th></tr></thead><tbody>';
+    if(vKeys.length>8)html+='<div class="hint" style="margin-bottom:6px">共 '+vKeys.length+' 家廠商，往下捲可看完整清單</div>';
+    html+='<div class="tscroll'+(vKeys.length>8?' tblscroll':'')+'"><table class="tbl"><thead><tr><th>廠商</th><th>款數</th><th>件數</th><th>金額（台幣）</th><th>金額（人民幣）</th><th>金額占比</th></tr></thead><tbody>';
     vKeys.forEach(function(v){
       var s=vendorStat[v];
       html+='<tr><td>'+esc(v)+'</td><td>'+s.styles+'</td><td>'+fmt(s.pieces)+'</td><td style="font-weight:700;color:var(--blue-dark)">'+ntStr(s.amount)+'</td><td style="color:var(--muted)">'+cnStr(s.amount)+'</td><td>'+(totalAmt>0?Math.round(s.amount/totalAmt*100)+'%':'—')+'</td></tr>';
@@ -1359,58 +1418,6 @@ function renderOverview(){
     html+='</tbody></table></div></div>';
   }
 
-  (function(){
-    var RK_PER=10;
-    var rows=ids.map(function(id){
-      var it=ITEMS[id];
-      var bySize={},tot=0;
-      arr(it.rows).forEach(function(r){
-        var sz=r.size||'未填',q=num(r.orderQty);
-        bySize[sz]=(bySize[sz]||0)+q;tot+=q;
-      });
-      var pr=num(it.price);
-      return {id:id,no:it.styleNo||'',bySize:bySize,tot:tot,price:pr,amt:tot*pr};
-    }).filter(function(r){return r.tot>0||r.price>0;});
-    if(!rows.length)return;
-    if(rkSort==='amt')rows.sort(function(a,b){return b.amt-a.amt;});
-    else if(rkSort==='price')rows.sort(function(a,b){return b.price-a.price;});
-    else rows.sort(function(a,b){return b.tot-a.tot;});
-    var pages=Math.max(1,Math.ceil(rows.length/RK_PER));
-    if(rkPage>pages)rkPage=1;
-    var from=(rkPage-1)*RK_PER,page=rows.slice(from,from+RK_PER);
-    var szCols=CONFIG.sizes.slice();
-    Object.keys(sizePieces).forEach(function(sz){if(szCols.indexOf(sz)<0)szCols.push(sz);});
-    var showMoney=isAdmin();
-
-    html+='<div class="card" style="margin-top:14px"><h3>款式下單排行 <span class="sub">'+esc(ovMonth+(ovPeriod==='all'?' 整月':'｜'+(((PERIODS[ovPeriod]||{}).name)||'')))+'</span></h3>';
-    html+='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><span class="hint">排序依據</span><div class="chips">'+
-      '<button class="chip'+(rkSort==='qty'?' active':'')+'" data-rks="qty">下單件數</button>'+
-      (showMoney?'<button class="chip'+(rkSort==='amt'?' active':'')+'" data-rks="amt">總成本</button><button class="chip'+(rkSort==='price'?' active':'')+'" data-rks="price">單價</button>':'')+
-      '</div><span class="hint" style="margin-left:auto">共 '+rows.length+' 款，每頁 '+RK_PER+' 款</span></div>';
-    html+='<div class="tscroll"><table class="tbl"><thead><tr><th>#</th><th>貨號</th>'+
-      szCols.map(function(sz){return '<th style="background:var(--blue-dark)">'+esc(sz)+'</th>';}).join('')+
-      '<th>合計件數</th>'+(showMoney?'<th style="background:#3B5C8F">成本</th><th style="background:#3B5C8F">總成本</th>':'')+'</tr></thead><tbody>';
-    page.forEach(function(r,i){
-      var rank=from+i+1;
-      html+='<tr><td class="'+(rank<=3?'':'')+'" style="font-weight:800;color:'+(rank<=3?'var(--orange)':'var(--muted)')+'">'+rank+'</td>'+
-        '<td><span class="rk-no" data-rkno="'+esc(r.id)+'">'+esc(r.no)+'</span></td>'+
-        szCols.map(function(sz){return '<td'+(r.bySize[sz]?'':' class="rk-zero"')+'>'+(r.bySize[sz]?fmt(r.bySize[sz]):'—')+'</td>';}).join('')+
-        '<td style="font-weight:800">'+fmt(r.tot)+'</td>'+
-        (showMoney?'<td>'+ntStr(r.price)+' <span style="color:var(--muted)">('+cnStr(r.price)+')</span></td>'+
-          '<td style="font-weight:800;color:var(--blue-dark)">'+ntStr(r.amt)+'</td>':'')+
-        '</tr>';
-    });
-    html+='</tbody></table></div>';
-    if(pages>1){
-      html+='<div style="display:flex;gap:6px;align-items:center;justify-content:center;margin-top:12px;flex-wrap:wrap">';
-      html+='<button class="pg" data-rkp="'+(rkPage-1)+'"'+(rkPage<=1?' disabled':'')+'>\u2039 上一頁</button>';
-      for(var pnum=1;pnum<=pages;pnum++)html+='<button class="pg'+(pnum===rkPage?' active':'')+'" data-rkp="'+pnum+'">'+pnum+'</button>';
-      html+='<button class="pg" data-rkp="'+(rkPage+1)+'"'+(rkPage>=pages?' disabled':'')+'>下一頁 \u203A</button>';
-      html+='</div>';
-    }
-    html+='<div class="hint" style="margin-top:10px;text-align:center">第 '+(from+1)+'\u2013'+Math.min(from+RK_PER,rows.length)+' 款，共 '+rows.length+' 款\u3000點貨號可看款式圖</div>';
-    html+='</div>';
-  })();
 
   el.innerHTML=html;
   $('ov_month').addEventListener('change',function(){ovMonth=this.value;ovPeriod='all';rkPage=1;renderOverview();});
