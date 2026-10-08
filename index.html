@@ -603,7 +603,7 @@ var DEFAULT_CONFIG = {
   baseColors:['白','米','黑','藏青','灰'],
   accentColors:['黃','橙','藍','粉'],
   sizes:['F','S','M','L','XL'],
-  styleTypes:['衝量款','A','B','C'],
+  styleTypes:['衝量款','A','B','C','自訂款','拿貨'],
   vendors:['PANDA','曼羽信','老余','雅香','境而家','參參牛仔','大七','UU飾品'],
   freights:['鴻海貨運','邑偉貨運'],
   labelTypes:['常規領標','碼數領標'],
@@ -673,7 +673,20 @@ function addCatItem(gname,item){
   Object.keys(hid).forEach(function(k){if((hid[k]||[]).indexOf(item)>=0)has=true;});
   if(!has)g.items.push(item);
 }
+function addListItem(key,item){
+  CONFIG[key]=CONFIG[key]||[];
+  if(CONFIG[key].indexOf(item)>=0)return;
+  var hid=((CONFIG.hidden||{})[key])||[];
+  for(var i=0;i<hid.length;i++){if(String(hid[i]&&hid[i].name!=null?hid[i].name:hid[i])===item)return;}
+  CONFIG[key].push(item);
+}
 function migrateConfig(){
+  if(!CONFIG.migStyle2){
+    addListItem('styleTypes','自訂款');
+    addListItem('styleTypes','拿貨');
+    CONFIG.migStyle2=true;
+    if(!DEMO)dbSet(ROOT+'/config',JSON.parse(JSON.stringify(CONFIG)));
+  }
   if(!CONFIG.migCat2){
     addCatItem('上衣','BRA TOP');
     addCatItem('下搭','褲裝');
@@ -782,6 +795,7 @@ function normalizeConfig(v){
   if(v.password)c.password=v.password;
   if(v.rate!=null&&num(v.rate)>0)c.rate=num(v.rate);
   if(v.migAcc)c.migAcc=true;
+  if(v.migStyle2)c.migStyle2=true;
   if(v.migCat2)c.migCat2=true;
   return c;
 }
