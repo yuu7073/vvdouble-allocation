@@ -381,6 +381,7 @@ hidden,[hidden]{display:none !important}
         <div class="fld"><label>領標</label><select id="f_label"></select></div>
         <div class="fld"><label>吊牌</label><select id="f_tag"></select></div>
         <div class="fld"><label>品檢</label><select id="f_qc"></select></div>
+        <div class="fld"><label>開發方式</label><select id="f_devType"></select></div>
       </div>
       <div class="form-grid" style="margin-top:12px;grid-template-columns:1fr 1fr 2fr">
         <div class="fld">
@@ -603,12 +604,13 @@ var DEFAULT_CONFIG = {
   baseColors:['白','米','黑','藏青','灰'],
   accentColors:['黃','橙','藍','粉'],
   sizes:['F','S','M','L','XL'],
-  styleTypes:['衝量款','A','B','C','自訂款','拿貨'],
+  styleTypes:['衝量款','A','B','C'],
   vendors:['PANDA','曼羽信','老余','雅香','境而家','參參牛仔','大七','UU飾品'],
   freights:['鴻海貨運','邑偉貨運'],
   labelTypes:['常規領標','碼數領標'],
   tagTypes:['常規吊牌','常規吊牌+涼感吊牌','常規吊牌+純棉吊牌','常規吊牌+聯名吊牌'],
   qcTypes:['苗姐品檢','三好品檢'],
+  devTypes:['自訂款','拿貨'],
   rate:4.8,
   accessories:[],
   hidden:{},
@@ -681,10 +683,14 @@ function addListItem(key,item){
   CONFIG[key].push(item);
 }
 function migrateConfig(){
-  if(!CONFIG.migStyle2){
-    addListItem('styleTypes','自訂款');
-    addListItem('styleTypes','拿貨');
-    CONFIG.migStyle2=true;
+  if(!CONFIG.migStyle3){
+    // 自訂款／拿貨 誤加進款別，改放到「開發方式」，這裡把款別清乾淨
+    ['自訂款','拿貨'].forEach(function(v){
+      CONFIG.styleTypes=(CONFIG.styleTypes||[]).filter(function(x){return x!==v;});
+      if(CONFIG.hidden&&CONFIG.hidden.styleTypes)
+        CONFIG.hidden.styleTypes=CONFIG.hidden.styleTypes.filter(function(x){return String(x&&x.name!=null?x.name:x)!==v;});
+    });
+    CONFIG.migStyle3=true;
     if(!DEMO)dbSet(ROOT+'/config',JSON.parse(JSON.stringify(CONFIG)));
   }
   if(!CONFIG.migCat2){
@@ -774,7 +780,7 @@ function seedDemo(){
     });
     MOCK.allocation.items['m'+idx]={periodId:pid,styleNo:no,styleType:'C',category:cat,categoryGroup:group,
       vendor:VENDORS[idx%3],orderDate:'2026-07-28',deliveryDate:'2026-08-05',onShelf:'',
-      freight:'鴻海',ship:'海運',pay:'貨運行轉匯',price:PRICE[cat]||50,qc:(idx%2?'三好品檢':'苗姐品檢'),moq:50,accessory:'',labelNote:'',notes:'',image:'',
+      freight:'鴻海',ship:'海運',pay:'貨運行轉匯',price:PRICE[cat]||50,qc:(idx%2?'三好品檢':'苗姐品檢'),devType:(idx%3?'自訂款':'拿貨'),moq:50,accessory:'',labelNote:'',notes:'',image:'',
       measurements:[],rows:rows,createdAt:idx+1};
   });
   seedDemoBoard();
@@ -782,7 +788,7 @@ function seedDemo(){
 
 function normalizeConfig(v){
   var c=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-  ['stores','baseColors','accentColors','sizes','styleTypes','vendors','freights','labelTypes','tagTypes','qcTypes'].forEach(function(k){if(v[k])c[k]=arr(v[k]).map(String);});
+  ['stores','baseColors','accentColors','sizes','styleTypes','vendors','freights','labelTypes','tagTypes','qcTypes','devTypes'].forEach(function(k){if(v[k])c[k]=arr(v[k]).map(String);});
   if(v.categories)c.categories=arr(v.categories).map(function(g){return {name:g.name||'',pct:num(g.pct),items:arr(g.items||[]).map(String)};});
   if(v.accessories)c.accessories=arr(v.accessories).map(function(a){return (a&&typeof a==='object')?{name:a.name||'',image:a.image||''}:{name:String(a),image:''};});
   c.hidden={};
@@ -795,7 +801,7 @@ function normalizeConfig(v){
   if(v.password)c.password=v.password;
   if(v.rate!=null&&num(v.rate)>0)c.rate=num(v.rate);
   if(v.migAcc)c.migAcc=true;
-  if(v.migStyle2)c.migStyle2=true;
+  if(v.migStyle3)c.migStyle3=true;
   if(v.migCat2)c.migCat2=true;
   return c;
 }
@@ -936,7 +942,7 @@ function buildFormStatic(){
   if(formRows.length===0)resetForm();else{renderMeas();renderDetail();renderThumbs();}
 }
 function fillSimpleSelects(){
-  [['f_styleType','styleTypes'],['f_vendor','vendors'],['f_freight','freights'],['f_label','labelTypes'],['f_tag','tagTypes'],['f_qc','qcTypes']].forEach(function(p){
+  [['f_styleType','styleTypes'],['f_vendor','vendors'],['f_freight','freights'],['f_label','labelTypes'],['f_tag','tagTypes'],['f_qc','qcTypes'],['f_devType','devTypes']].forEach(function(p){
     var el2=$(p[0]);if(!el2)return;var cur=el2.value;
     var h='<option value="">—</option>';
     (CONFIG[p[1]]||[]).forEach(function(v){h+='<option'+(v===cur?' selected':'')+'>'+esc(v)+'</option>';});
@@ -1105,7 +1111,7 @@ function updatePriceTwd(){
 function resetForm(){
   editItemId=null;
   $('formTitle').innerHTML='新增下單卡 <span class="sub">採購每下一款填一張，儲存後自動彙總到總覽</span>';
-  ['f_styleNo','f_styleType','f_vendor','f_orderDate','f_deliveryDate','f_sampleDate','f_prodDays','f_onShelf','f_freight','f_ship','f_price','f_accessory','f_moq','f_label','f_tag','f_qc'].forEach(function(id){$(id).value='';});
+  ['f_styleNo','f_styleType','f_vendor','f_orderDate','f_deliveryDate','f_sampleDate','f_prodDays','f_onShelf','f_freight','f_ship','f_price','f_accessory','f_moq','f_label','f_tag','f_qc','f_devType'].forEach(function(id){$(id).value='';});
   updatePriceTwd();
   $('f_pay').value='貨運行轉匯';
   $('f_category').value='';
@@ -1129,7 +1135,7 @@ function collectFormItem(){
     sampleDate:$('f_sampleDate').value,prodDays:$('f_prodDays').value.trim(),
     onShelf:($('f_onShelfSel').value==='__other'?$('f_onShelf').value:$('f_onShelfSel').value),
     freight:$('f_freight').value.trim(),ship:$('f_ship').value.trim(),pay:$('f_pay').value.trim(),
-    price:num($('f_price').value),qc:$('f_qc').value,accessory:$('f_accessory').value.trim(),moq:num($('f_moq').value),
+    price:num($('f_price').value),qc:$('f_qc').value,devType:$('f_devType').value,accessory:$('f_accessory').value.trim(),moq:num($('f_moq').value),
     labelNote:$('f_label').value.trim(),tag:$('f_tag').value,notes:cleanHtml($('f_notes').innerHTML),
     images:formImages.slice(),colorImages:formColorImages.slice(),image:formImages[0]||'',
     measurements:formMeas.filter(function(m){return String(m.name||'').trim()||String(m.value||'').trim();}),
@@ -1170,7 +1176,7 @@ function editItem(id){
   $('f_sampleDate').value=it.sampleDate||'';$('f_prodDays').value=it.prodDays||'';
   $('f_onShelf').value=it.onShelf||'';fillOnShelfSelect();
   setSel('f_freight',it.freight||'');$('f_ship').value=it.ship||'';$('f_pay').value=it.pay||'';
-  $('f_price').value=it.price||'';setSel('f_qc',it.qc||'');updatePriceTwd();
+  $('f_price').value=it.price||'';setSel('f_qc',it.qc||'');setSel('f_devType',it.devType||'');updatePriceTwd();
   setSel('f_accessory',it.accessory||'');updateAccPreview();
   $('f_moq').value=it.moq||'';
   setSel('f_label',it.labelNote||'');setSel('f_tag',it.tag||'');
@@ -1681,7 +1687,7 @@ function renderSettings(){
   var html='<div class="card"><h3>門市管理 <span class="sub">拖曳標籤可調整順序（即下單卡與總覽的欄位順序）；✕ 是隱藏（防呆），隱藏區再按 ✕ 才是永久刪除</span></h3>'+listBlock('stores','','門市名稱')+'</div>';
   html+='<div class="card"><h3>下單卡選單選項 <span class="sub">同樣支援拖曳排序與隱藏</span></h3>'+
     listBlock('styleTypes','款別')+listBlock('vendors','廠商名稱')+listBlock('freights','貨運行')+
-    listBlock('labelTypes','領標')+listBlock('tagTypes','吊牌')+listBlock('qcTypes','品檢')+'</div>';
+    listBlock('labelTypes','領標')+listBlock('tagTypes','吊牌')+listBlock('qcTypes','品檢')+listBlock('devTypes','開發方式')+'</div>';
   var accHid=(CONFIG.hidden&&CONFIG.hidden.accessories)||[];
   html+='<div class="card"><h3>輔料清單 <span class="sub">可附圖片，下單卡選擇後會顯示縮圖</span></h3><div class="tagzone">';
   (CONFIG.accessories||[]).forEach(function(a,i){html+=tagChip('accessories',a,i);});
@@ -2908,7 +2914,8 @@ function openSheetFromData(it){
     '<td class="lbl">輔料</td><td>'+esc(it.accessory||'')+'</td></tr>'+
     '<tr><td class="lbl">領標</td><td colspan="3">'+esc(it.labelNote||'')+'</td>'+
     '<td class="lbl">吊牌</td><td colspan="3">'+esc(it.tag||'')+'</td></tr>'+
-    '<tr><td class="lbl">品檢</td><td colspan="7">'+esc(it.qc||'')+'</td></tr></table>';
+    '<tr><td class="lbl">品檢</td><td colspan="3">'+esc(it.qc||'')+'</td>'+
+    '<td class="lbl">開發方式</td><td colspan="3">'+esc(it.devType||'')+'</td></tr></table>';
 
   h+='<div class="sh-2col">';
   var imgs=arr(it.images).map(imgSrc).filter(Boolean);if(!imgs.length&&imgSrc(it.image))imgs=[imgSrc(it.image)];
@@ -2968,11 +2975,11 @@ function exportExcel(){
     s1.push([p.name||'',p.date||'',num(p.target)||'',pi.length,oq,(num(p.target)>0?Math.round(oq/num(p.target)*100)+'%':''),Math.round(amt),twd(amt),aq,wq,aq-wq,(aq>0?Math.round(wq/aq*100)+'%':'')]);
   });
 
-  var s2=[['檔期','款號','款別','品類','大類','廠商','單價(\uFFE5)','單價(NT$)','訂購件數','已配件數','留倉件數','下單金額(\uFFE5)','下單金額(NT$)','下單日期','交拍樣日期','交大貨日期','做貨天數','預計上架日','貨運行','運輸方式','付款方式','MOQ','品檢','輔料','領標','吊牌']];
+  var s2=[['檔期','款號','款別','品類','大類','廠商','單價(\uFFE5)','單價(NT$)','訂購件數','已配件數','留倉件數','下單金額(\uFFE5)','下單金額(NT$)','下單日期','交拍樣日期','交大貨日期','做貨天數','預計上架日','貨運行','運輸方式','付款方式','MOQ','品檢','開發方式','輔料','領標','吊牌']];
   ids.forEach(function(id){
     var it=ITEMS[id];var p=PERIODS[it.periodId]||{};
     var ot=itemOrderTotal(it),at=itemAllocTotalCfg(it);
-    s2.push([p.name||'',it.styleNo||'',it.styleType||'',it.category||'',it.categoryGroup||'',it.vendor||'',num(it.price),twd(it.price),ot,at,ot-at,Math.round(ot*num(it.price)),twd(ot*num(it.price)),it.orderDate||'',it.sampleDate||'',it.deliveryDate||'',it.prodDays||'',it.onShelf||'',it.freight||'',it.ship||'',it.pay||'',num(it.moq)||'',it.qc||'',it.accessory||'',it.labelNote||'',it.tag||'']);
+    s2.push([p.name||'',it.styleNo||'',it.styleType||'',it.category||'',it.categoryGroup||'',it.vendor||'',num(it.price),twd(it.price),ot,at,ot-at,Math.round(ot*num(it.price)),twd(ot*num(it.price)),it.orderDate||'',it.sampleDate||'',it.deliveryDate||'',it.prodDays||'',it.onShelf||'',it.freight||'',it.ship||'',it.pay||'',num(it.moq)||'',it.qc||'',it.devType||'',it.accessory||'',it.labelNote||'',it.tag||'']);
   });
 
   var h3=['檔期','款號','顏色','尺寸','訂購數'].concat(CONFIG.stores).concat(['官網','已配','留倉']);
