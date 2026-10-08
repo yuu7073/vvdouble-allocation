@@ -667,45 +667,54 @@ function allColors(){return (CONFIG.baseColors||[]).concat(CONFIG.accentColors||
 function colorType(c){return (CONFIG.baseColors||[]).indexOf(c)>=0?'base':'accent';}
 function addCatItem(gname,item){
   var g=null;(CONFIG.categories||[]).forEach(function(x){if(x.name===gname)g=x;});
-  if(!g)return;
+  if(!g)return false;
   g.items=g.items||[];
   var has=false;
   (CONFIG.categories||[]).forEach(function(x){if((x.items||[]).indexOf(item)>=0)has=true;});
   var hid=(CONFIG.hidden||{});
   Object.keys(hid).forEach(function(k){if((hid[k]||[]).indexOf(item)>=0)has=true;});
-  if(!has)g.items.push(item);
+  if(has)return false;
+  g.items.push(item);return true;
 }
 function addListItem(key,item){
   CONFIG[key]=CONFIG[key]||[];
-  if(CONFIG[key].indexOf(item)>=0)return;
+  if(CONFIG[key].indexOf(item)>=0)return false;
   var hid=((CONFIG.hidden||{})[key])||[];
-  for(var i=0;i<hid.length;i++){if(String(hid[i]&&hid[i].name!=null?hid[i].name:hid[i])===item)return;}
-  CONFIG[key].push(item);
+  for(var i=0;i<hid.length;i++){if(String(hid[i]&&hid[i].name!=null?hid[i].name:hid[i])===item)return false;}
+  CONFIG[key].push(item);return true;
 }
+var migWrote=false;
 function migrateConfig(){
+  var changed=false;
   if(!CONFIG.migStyle3){
     // 自訂款／拿貨 誤加進款別，改放到「開發方式」，這裡把款別清乾淨
     ['自訂款','拿貨'].forEach(function(v){
+      var n0=(CONFIG.styleTypes||[]).length;
       CONFIG.styleTypes=(CONFIG.styleTypes||[]).filter(function(x){return x!==v;});
-      if(CONFIG.hidden&&CONFIG.hidden.styleTypes)
+      if(CONFIG.styleTypes.length!==n0)changed=true;
+      if(CONFIG.hidden&&CONFIG.hidden.styleTypes){
+        var h0=CONFIG.hidden.styleTypes.length;
         CONFIG.hidden.styleTypes=CONFIG.hidden.styleTypes.filter(function(x){return String(x&&x.name!=null?x.name:x)!==v;});
+        if(CONFIG.hidden.styleTypes.length!==h0)changed=true;
+      }
     });
     CONFIG.migStyle3=true;
-    if(!DEMO)dbSet(ROOT+'/config',JSON.parse(JSON.stringify(CONFIG)));
   }
   if(!CONFIG.migCat2){
-    addCatItem('上衣','BRA TOP');
-    addCatItem('下搭','褲裝');
-    addCatItem('下搭','裙裝');
+    if(addCatItem('上衣','BRA TOP'))changed=true;
+    if(addCatItem('下搭','褲裝'))changed=true;
+    if(addCatItem('下搭','裙裝'))changed=true;
     CONFIG.migCat2=true;
-    if(!DEMO)dbSet(ROOT+'/config',JSON.parse(JSON.stringify(CONFIG)));
   }
-  if(CONFIG.migAcc)return;
-  var has=false;
-  (CONFIG.categories||[]).forEach(function(g){(g.items||[]).forEach(function(i){if(i==='飾品'||i==='皮帶')has=true;});});
-  if(!has)CONFIG.categories.push({name:'配件',pct:0,items:['飾品','皮帶']});
-  CONFIG.migAcc=true;
-  if(!DEMO)dbSet(ROOT+'/config',JSON.parse(JSON.stringify(CONFIG)));
+  if(!CONFIG.migAcc){
+    var has=false;
+    (CONFIG.categories||[]).forEach(function(g){(g.items||[]).forEach(function(i){if(i==='飾品'||i==='皮帶')has=true;});});
+    if(!has){CONFIG.categories.push({name:'配件',pct:0,items:['飾品','皮帶']});changed=true;}
+    CONFIG.migAcc=true;
+  }
+  // 只有真的改到東西才寫回，而且一次載入最多寫一次：
+  // 避免舊分頁與新分頁互相改寫設定造成無限循環
+  if(changed&&!DEMO&&!migWrote){migWrote=true;dbSet(ROOT+'/config',JSON.parse(JSON.stringify(CONFIG)));}
 }
 function RATE(){var r=num(CONFIG&&CONFIG.rate);return r>0?r:4.8;}
 function twd(rmb){return Math.round(num(rmb)*RATE());}
@@ -800,9 +809,7 @@ function normalizeConfig(v){
   });}
   if(v.password)c.password=v.password;
   if(v.rate!=null&&num(v.rate)>0)c.rate=num(v.rate);
-  if(v.migAcc)c.migAcc=true;
-  if(v.migStyle3)c.migStyle3=true;
-  if(v.migCat2)c.migCat2=true;
+  Object.keys(v).forEach(function(k){if(k.indexOf('mig')===0&&v[k])c[k]=v[k];});
   return c;
 }
 
@@ -927,7 +934,7 @@ function wireStatic(){
   wireSettingsStatic();
   wireBoardStatic();
   $('f_price').addEventListener('input',updatePriceTwd);
-  $('f_period').addEventListener('change',function(){renderDetail();});
+  $('f_period').addEventListener('change',function(){detailSig=null;renderDetail();});
   $('saveItem').addEventListener('click',saveItem);
   $('cancelEdit').addEventListener('click',function(){resetForm();toast('已清空表單');});
   document.querySelectorAll('.rt-bar [data-cmd]').forEach(function(b){b.addEventListener('mousedown',function(e){e.preventDefault();$('f_notes').focus();document.execCommand(b.dataset.cmd,false,null);});});
@@ -939,7 +946,7 @@ function wireStatic(){
 /* ---------- 下單卡表單 ---------- */
 function buildFormStatic(){
   fillPeriodSelect();fillCategorySelect();fillSimpleSelects();
-  if(formRows.length===0)resetForm();else{renderMeas();renderDetail();renderThumbs();}
+  if(formRows.length===0)resetForm();else{renderMeas();renderDetailIfShapeChanged();renderThumbs();}
 }
 function fillSimpleSelects(){
   [['f_styleType','styleTypes'],['f_vendor','vendors'],['f_freight','freights'],['f_label','labelTypes'],['f_tag','tagTypes'],['f_qc','qcTypes'],['f_devType','devTypes']].forEach(function(p){
@@ -1033,7 +1040,21 @@ function sizeOptions(sel){
   return h;
 }
 function formIsExcl(){var sel=$('f_period');return !!(sel&&sel.value&&isExcl(sel.value));}
+var detailSig=null;
+function detailShape(){
+  return JSON.stringify({s:CONFIG.stores,z:CONFIG.sizes,c:allColors(),n:formRows.length,x:formIsExcl()});
+}
+// 設定變動時才重畫明細表；正在打字時不要把表格重建掉
+function renderDetailIfShapeChanged(){
+  if(detailSig!==null&&detailSig===detailShape())return;
+  renderDetail();
+}
 function renderDetail(){
+  var ae=document.activeElement,fk=null,caret=null;
+  if(ae&&ae.dataset&&ae.dataset.i!=null){
+    fk={i:ae.dataset.i,f:ae.dataset.f||'',store:ae.dataset.store||''};
+    try{caret=ae.selectionStart;}catch(e){}
+  }
   var exclForm=formIsExcl();
   if(exclForm)formRows.forEach(function(r){r.web=0;});
   var eh=$('exclHint');if(eh)eh.hidden=!exclForm;
@@ -1052,6 +1073,12 @@ function renderDetail(){
     b+='<td><button class="btn btn-ghost btn-sm" data-del="'+i+'">✕</button></td></tr>';
   });
   $('detailBody').innerHTML=b;
+  detailSig=detailShape();
+  if(fk){
+    var sel='#detailBody [data-i="'+fk.i+'"]'+(fk.store?'[data-store="'+fk.store+'"]':'[data-f="'+fk.f+'"]');
+    var el=document.querySelector(sel);
+    if(el){el.focus();if(caret!=null){try{el.setSelectionRange(caret,caret);}catch(e){}}}
+  }
   updateDetailTotals();
 }
 function updateDetailTotals(){
