@@ -586,6 +586,7 @@ hidden,[hidden]{display:none !important}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </content>
 </invoke>
 <script>
@@ -3077,14 +3078,30 @@ function gsCatchRedirect(){
   else if(p.error)gsSS('gsErr',p.error_description||p.error);
   try{history.replaceState(null,'',location.pathname+location.search);}catch(e){location.hash='';}
 }
+function gsReady(){return typeof google!=='undefined'&&google.accounts&&google.accounts.oauth2;}
+var gsWaiting=false;
 function gsBeginAuth(){
   if(!CONFIG.gsheetClient){toast('請先填 Google 授權用戶端 ID 並儲存');return;}
-  gsSS('gsBack','sched');
-  location.href='https://accounts.google.com/o/oauth2/v2/auth'
-    +'?client_id='+encodeURIComponent(CONFIG.gsheetClient)
-    +'&redirect_uri='+encodeURIComponent(gsRedirectUri())
-    +'&response_type=token&include_granted_scopes=true&prompt=consent'
-    +'&scope='+encodeURIComponent(GS_SCOPE);
+  if(!gsReady()){schedErr('Google 授權元件還沒載入完，等幾秒再按一次');return;}
+  if(gsWaiting)return;
+  gsWaiting=true;schedBusy('等待 Google 授權視窗…');
+  var done=false;
+  var finish=function(msg){
+    if(done)return;done=true;gsWaiting=false;schedBusy('');
+    if(msg)schedErr(msg); else {toast('已連線 Google');renderSched();}
+  };
+  setTimeout(function(){finish('授權視窗沒有出現，多半是被瀏覽器擋住了。請看網址列右邊的「彈出式視窗已封鎖」圖示，允許本站後再按一次。');},25000);
+  try{
+    google.accounts.oauth2.initTokenClient({
+      client_id:CONFIG.gsheetClient,
+      scope:GS_SCOPE,
+      callback:function(resp){
+        if(resp&&resp.access_token){gsStoreToken(resp.access_token,resp.expires_in);finish('');}
+        else finish('授權沒有完成');
+      },
+      error_callback:function(e){finish('授權中斷：'+((e&&(e.type||e.message))||'視窗被關閉'));}
+    }).requestAccessToken({prompt:'consent'});
+  }catch(e){finish('授權失敗：'+(e&&e.message||e));}
 }
 function gsAuth(cb){
   if(gsLinked()){cb(null,gToken);return;}
@@ -3220,7 +3237,7 @@ function schedHtml(){
     '<button class="btn '+(gsLinked()?'btn-ghost':'btn-primary')+' btn-sm" id="sch_link">'+(gsLinked()?'重新連線 Google':'連線 Google')+'</button>'+
     '<button class="btn btn-ghost btn-sm" id="sch_tabs">讀取工作表清單</button>'+
     '<span class="hint" style="align-self:center">'+(gsLinked()?'<b style="color:var(--blue-dark)">已連線</b>':'尚未連線')+'</span></div>'+
-    '<p class="hint">按「連線 Google」會跳到 Google 的授權頁，同意後會自己回到這一頁。連線效期約一小時，過了再按一次就好。</p></div>'+
+    '<p class="hint">按「連線 Google」會跳出 Google 的授權視窗，同意一次即可。連線效期約一小時，過了再按一次就好。</p></div>'+
 
     '<div class="card"><h3>帶入排程</h3>'+
     '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">'+
