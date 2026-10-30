@@ -3035,7 +3035,7 @@ function schedProdDays(v){v=String(v||'').trim();if(!v)return '';return /^[0-9]+
 
 /* --- 依標題列找欄位 --- */
 function schedTargets(head){
-  var norm=(head||[]).map(normHead),used={},cols=[],ex=[],miss=[];
+  var norm=(head||[]).map(normHead),used={},cols=[],ex=[],miss=[],missStores=[];
   function find(cands){
     for(var c=0;c<cands.length;c++)for(var i=0;i<norm.length;i++)if(!used[i]&&norm[i]===cands[c]){used[i]=1;return i;}
     return -1;
@@ -3045,9 +3045,11 @@ function schedTargets(head){
   add(['預定頭單'],'預定頭單',function(it){return schedCell(arr(it.rows),function(r){return num(r.orderQty);});});
   add(['官網頭單'],'官網頭單',function(it){return schedCell(arr(it.rows),function(r){return num(r.web);});});
   (CONFIG.stores||[]).slice().sort(function(a,b){return String(b).length-String(a).length;}).forEach(function(s){
+    var before=miss.length;
     add((STORE_ALIAS[s]||[]).concat([s+'頭單',s]),s,function(it){
       return schedCell(arr(it.rows),function(r){return (r.alloc&&r.alloc[s])||0;});
     });
+    if(miss.length>before){miss.pop();missStores.push(s);}
   });
   var iM=find(['追加MOQ','追加moq']);
   if(iM<0)miss.push('追加MOQ');else cols.push({i:iM,label:'追加MOQ',fn:function(it){return String(it.moq==null?'':it.moq).trim();},note:false});
@@ -3061,7 +3063,7 @@ function schedTargets(head){
   addEx(['顏色'],function(it){return uniqBy(arr(it.rows),function(r){return r.color;}).join('\n');});
   addEx(['規格'],function(it){return uniqBy(arr(it.rows),function(r){return r.size;}).join('\n');});
   cols.sort(function(a,b){return a.i-b.i;});
-  return {style:style,cols:cols,ex:ex,miss:miss};
+  return {style:style,cols:cols,ex:ex,miss:miss,missStores:missStores};
 }
 function schedRowCells(it,oldRow,T,lo,hi){
   var cells=[];
@@ -3185,7 +3187,15 @@ function schedCompare(){
       T.cols.forEach(function(c){if(c.note&&schedKeepNotes(oldRow[c.i]||'').length)kept=true;});
       out.push({id:id,styleNo:sn,status:'ok',row:row+1,cells:schedRowCells(it,oldRow,T,lo,hi),kept:kept});
     });
-    schedState.result={tab:tab,pid:pid,list:out,T:T,lo:lo,hi:hi,head:head};
+    var warn=T.miss.slice();
+    (T.missStores||[]).forEach(function(st){
+      var tot=0;
+      itemsOfPeriods([pid]).forEach(function(id){
+        arr((ITEMS[id]||{}).rows).forEach(function(r){tot+=num(r.alloc&&r.alloc[st]);});
+      });
+      if(tot>0)warn.push(st+'（這個檔期有 '+fmt(tot)+' 件配到這裡）');
+    });
+    schedState.result={tab:tab,pid:pid,list:out,T:T,lo:lo,hi:hi,head:head,warn:warn};
     renderSchedResult();
     var okN=out.filter(function(o){return o.status==='ok';}).length;
     toast('比對完成：'+okN+' 款對得上，共 '+out.length+' 款');
@@ -3325,7 +3335,8 @@ function renderSchedResult(){
   if(!list.length){el.innerHTML='<p class="hint">這個檔期還沒有款式。</p>';return;}
   var mapped={};T.cols.forEach(function(c){mapped[c.i]=1;});
   var h='';
-  if(T.miss.length)h+='<div class="hint" style="color:var(--orange);margin-bottom:10px">這張工作表沒有「'+esc(T.miss.join('、'))+'」欄位，這些資料不會寫過去。</div>';
+  var warn=res.warn||[];
+  if(warn.length)h+='<div class="hint" style="color:var(--orange);margin-bottom:10px">這張工作表沒有「'+esc(warn.join('、'))+'」欄位，這些資料不會寫過去。</div>';
   h+='<div style="overflow:auto"><table class="sh-tbl" style="font-size:12.5px"><tr><th>款號</th><th>排程列</th>';
   for(k=res.lo;k<=res.hi;k++)h+='<th'+(mapped[k]?'':' style="color:var(--muted);font-weight:400"')+'>'+esc(normHead(res.head[k])||colLetter(k))+'</th>';
   h+='<th>狀態</th></tr>';
