@@ -3113,7 +3113,7 @@ function gsBeginAuth(){
       client_id:CONFIG.gsheetClient,
       scope:GS_SCOPE,
       callback:function(resp){
-        if(resp&&resp.access_token){gsStoreToken(resp.access_token,resp.expires_in);finish('');}
+        if(resp&&resp.access_token){gsStoreToken(resp.access_token,resp.expires_in);schedTabsTried=false;finish('');}
         else finish('授權沒有完成');
       },
       error_callback:function(e){finish('授權中斷：'+((e&&(e.type||e.message))||'視窗被關閉'));}
@@ -3142,6 +3142,26 @@ function gsApi(path,opts,cb){
   });
 }
 function schedQuote(t){return "'"+String(t||'').replace(/'/g,"''")+"'";}
+function schedLS(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v);}catch(e){}return null;}
+function schedGuessTab(pid){
+  var saved=(CONFIG.gsheetTabs||{})[pid];
+  if(saved&&(!schedState.tabs.length||schedState.tabs.indexOf(saved)>=0))return saved;
+  var p=PERIODS[pid]||{},m=String(p.date||'').match(/^\d{4}-(\d{2})-(\d{2})$/);
+  if(!m)return '';
+  var pre=m[1]+m[2],tabs=schedState.tabs||[],i;
+  var norm=function(t){return String(t).replace(/\s/g,'');};
+  for(i=0;i<tabs.length;i++)if(norm(tabs[i])===pre)return tabs[i];
+  for(i=0;i<tabs.length;i++)if(norm(tabs[i]).indexOf(pre)===0)return tabs[i];
+  return '';
+}
+function schedRemember(pid,tab){
+  if(!pid||!tab)return;
+  schedLS('schedPid',pid);
+  CONFIG.gsheetTabs=CONFIG.gsheetTabs||{};
+  if(CONFIG.gsheetTabs[pid]===tab)return;
+  CONFIG.gsheetTabs[pid]=tab;
+  if(!DEMO)dbUpdate(ROOT+'/config/gsheetTabs',CONFIG.gsheetTabs);
+}
 
 /* --- 讀工作表清單 --- */
 function schedLoadTabs(){
@@ -3198,6 +3218,7 @@ function schedCompare(){
       if(tot>0)warn.push(st+'（這個檔期有 '+fmt(tot)+' 件配到這裡）');
     });
     schedState.result={tab:tab,pid:pid,list:out,T:T,lo:lo,hi:hi,head:head,warn:warn};
+    schedRemember(pid,tab);
     renderSchedResult();
     var okN=out.filter(function(o){return o.status==='ok';}).length;
     toast('比對完成：'+okN+' 款對得上，共 '+out.length+' 款');
@@ -3307,11 +3328,14 @@ function schedHtml(){
 function fillSchedSelects(){
   var sp=$('sch_period');
   if(sp){
-    var cur=schedState.pid||sp.value;var h='<option value="">— 選擇檔期 —</option>';
+    var cur=schedState.pid||sp.value||schedLS('schedPid')||'';
+    if(cur&&!PERIODS[cur])cur='';
+    var h='<option value="">— 選擇檔期 —</option>';
     monthList().forEach(function(m){
       periodsOfMonth(m).forEach(function(pid){var p=PERIODS[pid];h+='<option value="'+pid+'">'+esc(m+'｜'+(p.name||p.date||'')+(isExcl(pid)?'（門市獨賣）':''))+'</option>';});
     });
     sp.innerHTML=h;if(cur)sp.value=cur;schedState.pid=sp.value;
+    if(schedState.pid&&!schedState.tab){var g=schedGuessTab(schedState.pid);if(g)schedState.tab=g;}
   }
   var st=$('sch_tab');
   if(st){
@@ -3378,15 +3402,22 @@ function wireSched(){
   $('sch_link').addEventListener('click',gsBeginAuth);
   $('sch_tabs').addEventListener('click',function(){$('schedErr').hidden=true;schedLoadTabs();});
   $('sch_cmp').addEventListener('click',function(){$('schedErr').hidden=true;schedCompare();});
-  $('sch_period').addEventListener('change',function(){schedState.pid=this.value;});
-  $('sch_tab').addEventListener('change',function(){schedState.tab=this.value;});
+  $('sch_period').addEventListener('change',function(){
+    schedState.pid=this.value;
+    var g=schedGuessTab(schedState.pid);
+    schedState.tab=g||'';
+    if($('sch_tab'))$('sch_tab').value=schedState.tab;
+    fillSchedSelects();
+  });
+  $('sch_tab').addEventListener('change',function(){schedState.tab=this.value;schedRemember(schedState.pid,schedState.tab);});
 }
-var schedLinkSig=null;
+var schedLinkSig=null,schedTabsTried=false;
 function renderSched(){
   if(!isAdmin()){$('page-sched').innerHTML='<div class="card"><p class="hint">這個頁面僅主管可用。</p></div>';return;}
   if(!schedRendered||schedLinkSig!==gsLinked()){$('page-sched').innerHTML=schedHtml();wireSched();schedRendered=true;schedLinkSig=gsLinked();}
   var ge=gsSS('gsErr');if(ge){gsSS('gsErr',null);schedErr('Google 授權沒有完成：'+ge);}
   fillSchedSelects();renderSchedResult();
+  if(gsLinked()&&!schedState.tabs.length&&!schedState.busy&&!schedTabsTried){schedTabsTried=true;schedLoadTabs();}
   if(schedState.busy)schedBusy(schedState.busy);
 }
 
