@@ -349,6 +349,7 @@ hidden,[hidden]{display:none !important}
       <button class="tab" data-tab="list">款式列表</button>
       <button class="tab" data-tab="board">白板</button>
       <button class="tab" data-tab="periods">檔期管理</button>
+      <button class="tab" id="tabSched" data-tab="sched" hidden>採購排程</button>
       <button class="tab" data-tab="settings">設定</button>
     </nav>
     <div id="userBox" class="hint" style="margin-left:auto;display:flex;align-items:center;gap:8px" hidden><span id="userEmail"></span><button class="btn btn-ghost btn-sm" id="logoutBtn">登出</button></div>
@@ -377,7 +378,7 @@ hidden,[hidden]{display:none !important}
         <div class="fld"><label>付款方式</label><input id="f_pay" value="貨運行轉匯"></div>
         <div class="fld"><label>單價（人民幣 &yen;）</label><input id="f_price" type="number" min="0" placeholder="人民幣單價"><div id="priceTwd" style="font-size:12px;font-weight:800;color:var(--blue-dark);margin-top:5px">&asymp; NT$ 0　<span style="font-weight:400;color:var(--muted)">(&times;4.8)</span></div></div>
         <div class="fld"><label>輔料</label><select id="f_accessory"></select><div id="accPreview" style="margin-top:6px" hidden><img id="accPreviewImg" style="max-height:56px;border:1px solid var(--line);border-radius:6px"></div></div>
-        <div class="fld"><label>MOQ</label><input id="f_moq" type="number" min="0" placeholder="例：50"></div>
+        <div class="fld"><label>追加MOQ</label><input id="f_moq" list="moqList" placeholder="例：單色90 / 一條布 / 整款300件"><datalist id="moqList"></datalist><div style="font-size:11.5px;color:var(--muted);margin-top:5px">這裡寫什麼，排程的「追加MOQ」就帶什麼</div></div>
         <div class="fld"><label>領標</label><select id="f_label"></select></div>
         <div class="fld"><label>吊牌</label><select id="f_tag"></select></div>
         <div class="fld"><label>品檢</label><select id="f_qc"></select></div>
@@ -491,6 +492,7 @@ hidden,[hidden]{display:none !important}
     <div id="bdTabbar"></div>
   </section>
   <section id="page-periods" hidden></section>
+  <section id="page-sched" hidden></section>
   <section id="page-settings" hidden></section>
 </main>
 
@@ -584,6 +586,7 @@ hidden,[hidden]{display:none !important}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </content>
 </invoke>
 <script>
@@ -611,7 +614,11 @@ var DEFAULT_CONFIG = {
   tagTypes:['常規吊牌','常規吊牌+涼感吊牌','常規吊牌+純棉吊牌','常規吊牌+聯名吊牌'],
   qcTypes:['苗姐品檢','三好品檢'],
   devTypes:['自訂款','拿貨'],
+  moqPresets:['單色30起','單色50','單色90','一條布','整款300件'],
   rate:4.8,
+  gsheetId:'',
+  gsheetClient:'',
+  gsheetTabs:{},
   accessories:[],
   hidden:{},
   categories:[
@@ -789,7 +796,7 @@ function seedDemo(){
     });
     MOCK.allocation.items['m'+idx]={periodId:pid,styleNo:no,styleType:'C',category:cat,categoryGroup:group,
       vendor:VENDORS[idx%3],orderDate:'2026-07-28',deliveryDate:'2026-08-05',onShelf:'',
-      freight:'鴻海',ship:'海運',pay:'貨運行轉匯',price:PRICE[cat]||50,qc:(idx%2?'三好品檢':'苗姐品檢'),devType:(idx%3?'自訂款':'拿貨'),moq:50,accessory:'',labelNote:'',notes:'',image:'',
+      freight:'鴻海',ship:'海運',pay:'貨運行轉匯',price:PRICE[cat]||50,qc:(idx%2?'三好品檢':'苗姐品檢'),devType:(idx%3?'自訂款':'拿貨'),moq:'單色50',accessory:'',labelNote:'',notes:'',image:'',
       measurements:[],rows:rows,createdAt:idx+1};
   });
   seedDemoBoard();
@@ -809,6 +816,10 @@ function normalizeConfig(v){
   });}
   if(v.password)c.password=v.password;
   if(v.rate!=null&&num(v.rate)>0)c.rate=num(v.rate);
+  if(v.moqPresets)c.moqPresets=arr(v.moqPresets).map(String);
+  if(v.gsheetId!=null)c.gsheetId=String(v.gsheetId||'');
+  if(v.gsheetClient!=null)c.gsheetClient=String(v.gsheetClient||'');
+  if(v.gsheetTabs&&typeof v.gsheetTabs==='object'){c.gsheetTabs={};Object.keys(v.gsheetTabs).forEach(function(k){c.gsheetTabs[k]=String(v.gsheetTabs[k]||'');});}
   Object.keys(v).forEach(function(k){if(k.indexOf('mig')===0&&v[k])c[k]=v[k];});
   return c;
 }
@@ -819,6 +830,7 @@ function init(){
   if(DEMO){
     $('demoBanner').hidden=false;seedDemo();
     ROLE=/[?&]role=staff/.test(location.search)?'staff':'admin';
+    $('tabSched').hidden=!isAdmin();
     startData();return;
   }
   if(typeof firebase==='undefined'){document.body.insertAdjacentHTML('afterbegin','<div class="demo-banner">無法載入 Firebase，請檢查網路後重新整理</div>');return;}
@@ -829,6 +841,7 @@ function init(){
     USER=u;
     function grant(r){
       ROLE=r.role;
+      $('tabSched').hidden=!isAdmin();
       $('login').hidden=true;$('userBox').hidden=false;
       $('userEmail').textContent=(r.name?r.name+'｜':'')+u.email+(ROLE==='admin'?'（主管）':'（一般）');
       startData();
@@ -873,7 +886,7 @@ function switchTab(t,noPush){
   if(!noPush&&t!==currentTab){tabHistory.push(currentTab);if(tabHistory.length>20)tabHistory.shift();}
   currentTab=t;
   document.querySelectorAll('.tab').forEach(function(b){if(b.dataset.tab)b.classList.toggle('active',b.dataset.tab===t);});
-  ['overview','form','list','board','periods','settings'].forEach(function(p){$('page-'+p).hidden=(p!==t);});
+  ['overview','form','list','board','periods','sched','settings'].forEach(function(p){$('page-'+p).hidden=(p!==t);});
   document.body.classList.toggle('boardmode',t==='board');
   $('backBtn').hidden=tabHistory.length===0;
   refresh();
@@ -885,6 +898,7 @@ function refresh(){
   else if(currentTab==='list')renderList();
   else if(currentTab==='board')renderBoardShell();
   else if(currentTab==='periods')renderPeriods();
+  else if(currentTab==='sched')renderSched();
   else if(currentTab==='settings')renderSettings();
 }
 
@@ -956,6 +970,7 @@ function fillSimpleSelects(){
     if(cur&&(CONFIG[p[1]]||[]).indexOf(cur)<0)h+='<option selected>'+esc(cur)+'</option>';
     el2.innerHTML=h;
   });
+  var ml=$('moqList');if(ml){var hm='';(CONFIG.moqPresets||[]).forEach(function(v){hm+='<option value="'+esc(v)+'">';});ml.innerHTML=hm;}
   var acc=$('f_accessory');if(acc){
     var curA=acc.value,hA='<option value="">—</option>',found=false;
     (CONFIG.accessories||[]).forEach(function(a){if(a.name===curA)found=true;hA+='<option'+(a.name===curA?' selected':'')+'>'+esc(a.name)+'</option>';});
@@ -1162,7 +1177,7 @@ function collectFormItem(){
     sampleDate:$('f_sampleDate').value,prodDays:$('f_prodDays').value.trim(),
     onShelf:($('f_onShelfSel').value==='__other'?$('f_onShelf').value:$('f_onShelfSel').value),
     freight:$('f_freight').value.trim(),ship:$('f_ship').value.trim(),pay:$('f_pay').value.trim(),
-    price:num($('f_price').value),qc:$('f_qc').value,devType:$('f_devType').value,accessory:$('f_accessory').value.trim(),moq:num($('f_moq').value),
+    price:num($('f_price').value),qc:$('f_qc').value,devType:$('f_devType').value,accessory:$('f_accessory').value.trim(),moq:$('f_moq').value.trim(),
     labelNote:$('f_label').value.trim(),tag:$('f_tag').value,notes:cleanHtml($('f_notes').innerHTML),
     images:formImages.slice(),colorImages:formColorImages.slice(),image:formImages[0]||'',
     measurements:formMeas.filter(function(m){return String(m.name||'').trim()||String(m.value||'').trim();}),
@@ -1714,7 +1729,8 @@ function renderSettings(){
   var html='<div class="card"><h3>門市管理 <span class="sub">拖曳標籤可調整順序（即下單卡與總覽的欄位順序）；✕ 是隱藏（防呆），隱藏區再按 ✕ 才是永久刪除</span></h3>'+listBlock('stores','','門市名稱')+'</div>';
   html+='<div class="card"><h3>下單卡選單選項 <span class="sub">同樣支援拖曳排序與隱藏</span></h3>'+
     listBlock('styleTypes','款別')+listBlock('vendors','廠商名稱')+listBlock('freights','貨運行')+
-    listBlock('labelTypes','領標')+listBlock('tagTypes','吊牌')+listBlock('qcTypes','品檢')+listBlock('devTypes','開發方式')+'</div>';
+    listBlock('labelTypes','領標')+listBlock('tagTypes','吊牌')+listBlock('qcTypes','品檢')+listBlock('devTypes','開發方式')+
+    listBlock('moqPresets','追加MOQ 常用寫法','例：單色90')+'</div>';
   var accHid=(CONFIG.hidden&&CONFIG.hidden.accessories)||[];
   html+='<div class="card"><h3>輔料清單 <span class="sub">可附圖片，下單卡選擇後會顯示縮圖</span></h3><div class="tagzone">';
   (CONFIG.accessories||[]).forEach(function(a,i){html+=tagChip('accessories',a,i);});
@@ -2985,6 +3001,299 @@ function wireSheet(){
   });
 }
 
+/* ---------- 採購排程（Google 試算表串接） ---------- */
+var SCHED_COLS=[
+  {col:'AG',label:'預定頭單',pick:function(r){return num(r.orderQty);}},
+  {col:'AH',label:'官網頭單',pick:function(r){return num(r.web);}},
+  {col:'AI',label:'忠孝頭單',store:'忠孝'},
+  {col:'AJ',label:'統一頭單',store:'統一'},
+  {col:'AK',label:'桃園頭單',store:'桃園'},
+  {col:'AL',label:'台南頭單',store:'台南'},
+  {col:'AM',label:'新一中（鴻海直送）',store:'新一中'},
+  {col:'AN',label:'台中一中頭單',store:'一中'},
+  {col:'AO',label:'高雄頭單',store:'高雄'},
+  {col:'AP',label:'實際交貨數量',keep:true},
+  {col:'AQ',label:'追加MOQ',field:'moq'},
+  {col:'AR',label:'做貨天數',field:'prodDays'}
+];
+var SCHED_FIRST='AG',SCHED_LAST='AR',SCHED_MAXROW=400;
+var schedState={tab:'',pid:'',tabs:[],result:null,busy:''};
+var schedRendered=false;
+
+/* --- 格子內容 --- */
+function uniqBy(list,f){var out=[],seen={};list.forEach(function(x){var k=String(f(x)||'');if(!seen[k]){seen[k]=1;out.push(k);}});return out;}
+function schedCell(rows,pick){
+  var cols=uniqBy(rows,function(r){return r.color;});
+  var sizes=uniqBy(rows,function(r){return r.size;});
+  var multiC=cols.length>1,multiS=sizes.length>1,lines=[];
+  cols.forEach(function(c){
+    rows.forEach(function(r){
+      if(String(r.color||'')!==c)return;
+      var q=num(pick(r));if(!q)return;
+      var label=(multiC||!multiS)?String(r.color||''):'';
+      if(multiS)label+=String(r.size||'');
+      lines.push(label+((multiC&&!multiS)?'':' ')+q);
+    });
+  });
+  return lines.join('\n');
+}
+function schedIsNote(l){l=String(l||'').trim();if(!l)return false;if(/^[（(]/.test(l))return true;return !/\d\s*[)）]?$/.test(l);}
+function schedKeepNotes(oldText){
+  return String(oldText||'').split('\n').filter(schedIsNote);
+}
+function schedProdDays(v){v=String(v||'').trim();if(!v)return '';return /^[0-9]+$/.test(v)?v+'天':v;}
+function schedValuesFor(it,oldRow){
+  oldRow=oldRow||[];
+  var rows=arr(it.rows);
+  return SCHED_COLS.map(function(c,i){
+    var old=oldRow[i]==null?'':String(oldRow[i]);
+    if(c.keep)return old;
+    var v;
+    if(c.field)v=c.field==='prodDays'?schedProdDays(it.prodDays):String(it[c.field]==null?'':it[c.field]).trim();
+    else v=schedCell(rows,c.pick||function(r){return (r.alloc&&r.alloc[c.store])||0;});
+    if(c.field)return v;
+    var notes=schedKeepNotes(old);
+    if(notes.length)v=(v?v+'\n':'')+notes.join('\n');
+    return v;
+  });
+}
+
+/* --- Google 授權 --- */
+var gToken=null,gTokenExp=0;
+function gsReady(){return typeof google!=='undefined'&&google.accounts&&google.accounts.oauth2;}
+function gsAuth(cb){
+  if(gToken&&Date.now()<gTokenExp){cb(null,gToken);return;}
+  if(!CONFIG.gsheetClient){cb('還沒設定「Google 授權用戶端 ID」');return;}
+  if(!gsReady()){cb('Google 授權元件還沒載入完，等幾秒再按一次');return;}
+  try{
+    google.accounts.oauth2.initTokenClient({
+      client_id:CONFIG.gsheetClient,
+      scope:'https://www.googleapis.com/auth/spreadsheets',
+      callback:function(resp){
+        if(resp&&resp.access_token){gToken=resp.access_token;gTokenExp=Date.now()+((num(resp.expires_in)||3500)*1000)-60000;cb(null,gToken);}
+        else cb('授權沒有完成');
+      },
+      error_callback:function(){cb('授權視窗被關掉，或被瀏覽器的彈出視窗阻擋');}
+    }).requestAccessToken({prompt:''});
+  }catch(e){cb('授權失敗：'+(e&&e.message||e));}
+}
+function gsApi(path,opts,cb){
+  gsAuth(function(err,tok){
+    if(err){cb(err);return;}
+    opts=opts||{};opts.headers=opts.headers||{};
+    opts.headers['Authorization']='Bearer '+tok;
+    if(opts.body)opts.headers['Content-Type']='application/json';
+    fetch('https://sheets.googleapis.com/v4/spreadsheets/'+path,opts).then(function(r){
+      return r.json().then(function(j){return {ok:r.ok,code:r.status,j:j};},function(){return {ok:r.ok,code:r.status,j:{}};});
+    }).then(function(o){
+      if(!o.ok){
+        if(o.code===401){gToken=null;}
+        cb((o.j&&o.j.error&&o.j.error.message)||('試算表回應錯誤（'+o.code+'）'));return;
+      }
+      cb(null,o.j);
+    },function(e){cb('連不上 Google 試算表：'+(e&&e.message||e));});
+  });
+}
+function schedQuote(t){return "'"+String(t||'').replace(/'/g,"''")+"'";}
+
+/* --- 讀工作表清單 --- */
+function schedLoadTabs(){
+  if(!CONFIG.gsheetId){toast('請先填排程試算表 ID');return;}
+  schedBusy('讀取工作表清單…');
+  gsApi(encodeURIComponent(CONFIG.gsheetId)+'?fields=sheets.properties.title',null,function(err,j){
+    schedBusy('');
+    if(err){schedErr(err);return;}
+    schedState.tabs=arr(j.sheets).map(function(s){return (s.properties||{}).title||'';}).filter(Boolean);
+    toast('讀到 '+schedState.tabs.length+' 張工作表');
+    fillSchedSelects();
+  });
+}
+
+/* --- 比對 --- */
+function schedCompare(){
+  var pid=schedState.pid,tab=schedState.tab;
+  if(!pid){toast('請先選檔期');return;}
+  if(!tab){toast('請先選排程工作表');return;}
+  if(!CONFIG.gsheetId){toast('請先填排程試算表 ID');return;}
+  schedBusy('讀取排程內容…');
+  var q=schedQuote(tab);
+  var url=encodeURIComponent(CONFIG.gsheetId)+'/values:batchGet'
+    +'?ranges='+encodeURIComponent(q+'!M1:M'+SCHED_MAXROW)
+    +'&ranges='+encodeURIComponent(q+'!'+SCHED_FIRST+'1:'+SCHED_LAST+SCHED_MAXROW)
+    +'&majorDimension=ROWS';
+  gsApi(url,null,function(err,j){
+    schedBusy('');
+    if(err){schedErr(err);return;}
+    var mCol=arr(((arr(j.valueRanges)[0])||{}).values).map(function(r){return String((r&&r[0])||'').trim();});
+    var block=arr(((arr(j.valueRanges)[1])||{}).values);
+    var idx={};
+    mCol.forEach(function(v,i){if(v&&idx[v]==null)idx[v]=i;});
+    var out=[];
+    itemsOfPeriods([pid]).forEach(function(id){
+      var it=ITEMS[id];if(!it)return;
+      var sn=String(it.styleNo||'').trim();
+      var row=sn?idx[sn]:null;
+      if(!sn){out.push({id:id,styleNo:'',status:'nostyle'});return;}
+      if(row==null){out.push({id:id,styleNo:sn,status:'nomatch'});return;}
+      var oldRow=block[row]||[];
+      var vals=schedValuesFor(it,oldRow);
+      var kept=false;
+      SCHED_COLS.forEach(function(c,i){if(!c.keep&&!c.field&&schedKeepNotes(oldRow[i]||'').length)kept=true;});
+      out.push({id:id,styleNo:sn,status:'ok',row:row+1,vals:vals,kept:kept});
+    });
+    schedState.result={tab:tab,pid:pid,list:out};
+    renderSchedResult();
+    var okN=out.filter(function(o){return o.status==='ok';}).length;
+    toast('比對完成：'+okN+' 款對得上，共 '+out.length+' 款');
+  });
+}
+
+/* --- 寫入 --- */
+function schedWrite(){
+  var res=schedState.result;
+  if(!res){toast('請先按「比對」');return;}
+  var list=res.list.filter(function(o){return o.status==='ok';});
+  if(!list.length){toast('沒有可寫入的款式');return;}
+  if(!confirm('要把 '+list.length+' 款寫進「'+res.tab+'」嗎？\n（實際交貨數量那一欄不會動）')) return;
+  var q=schedQuote(res.tab);
+  var data=list.map(function(o){
+    return {range:q+'!'+SCHED_FIRST+o.row+':'+SCHED_LAST+o.row,majorDimension:'ROWS',values:[o.vals]};
+  });
+  schedBusy('寫入排程…');
+  gsApi(encodeURIComponent(CONFIG.gsheetId)+'/values:batchUpdate',
+    {method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:data})},
+    function(err,j){
+      schedBusy('');
+      if(err){schedErr(err);return;}
+      toast('已寫入 '+((j&&j.totalUpdatedCells)||0)+' 格');
+    });
+}
+
+/* --- 複製（備用） --- */
+function schedCopy(){
+  var res=schedState.result;
+  if(!res){toast('請先按「比對」');return;}
+  var list=res.list.filter(function(o){return o.status==='ok';});
+  if(!list.length){toast('沒有可複製的款式');return;}
+  var head=['排程列','款號'].concat(SCHED_COLS.map(function(c){return c.label;}));
+  var lines=[head.join('\t')];
+  list.forEach(function(o){
+    lines.push([o.row,o.styleNo].concat(o.vals.map(function(v){
+      v=String(v==null?'':v);
+      return /[\t\n"]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
+    })).join('\t'));
+  });
+  var txt=lines.join('\n');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast('已複製，可貼到試算表');},function(){schedFallbackCopy(txt);});
+  else schedFallbackCopy(txt);
+}
+function schedFallbackCopy(txt){
+  var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');toast('已複製，可貼到試算表');}catch(e){toast('複製失敗，請手動選取');}
+  document.body.removeChild(ta);
+}
+
+/* --- 畫面 --- */
+function schedBusy(msg){schedState.busy=msg;var el=$('schedBusy');if(el){el.textContent=msg;el.hidden=!msg;}}
+function schedErr(msg){var el=$('schedErr');if(el){el.textContent=msg;el.hidden=false;}toast(msg);}
+function schedHtml(){
+  return '<div class="card"><h3>連線設定 <span class="sub">只要設定一次，之後大家都共用</span></h3>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap">'+
+    '<div class="fld" style="flex:1;min-width:280px"><label>排程試算表 ID</label><input id="cfg_gsid" placeholder="網址 /d/ 後面那一長串"></div>'+
+    '<div class="fld" style="flex:1;min-width:280px"><label>Google 授權用戶端 ID</label><input id="cfg_gscl" placeholder="…apps.googleusercontent.com"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">'+
+    '<button class="btn btn-primary btn-sm" id="sch_savecfg">儲存設定</button>'+
+    '<button class="btn btn-ghost btn-sm" id="sch_tabs">讀取工作表清單</button></div>'+
+    '<p class="hint">第一次按「讀取工作表清單」時，Google 會跳出授權視窗，請用有編輯排程權限的帳號同意一次。</p></div>'+
+
+    '<div class="card"><h3>帶入排程</h3>'+
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">'+
+    '<div class="fld" style="min-width:230px"><label>檔期</label><select id="sch_period"></select></div>'+
+    '<div class="fld" style="min-width:300px"><label>排程工作表</label><select id="sch_tab"></select></div>'+
+    '<button class="btn btn-primary btn-sm" id="sch_cmp" style="margin-bottom:12px">比對</button>'+
+    '</div>'+
+    '<p class="hint">會寫入：預定頭單、官網頭單、各店頭單、追加MOQ、做貨天數。<b>實際交貨數量不會動</b>；原本括號裡的備註會留在格子最後面。</p>'+
+    '<div id="schedBusy" class="hint" hidden></div><div id="schedErr" class="hint" style="color:var(--danger)" hidden></div>'+
+    '</div>'+
+
+    '<div class="card"><h3>比對結果</h3><div id="schedResult"><p class="hint">選好檔期與工作表後按「比對」，這裡會列出每一款要寫什麼，確認後再送出。</p></div></div>';
+}
+function fillSchedSelects(){
+  var sp=$('sch_period');
+  if(sp){
+    var cur=schedState.pid||sp.value;var h='<option value="">— 選擇檔期 —</option>';
+    monthList().forEach(function(m){
+      periodsOfMonth(m).forEach(function(pid){var p=PERIODS[pid];h+='<option value="'+pid+'">'+esc(m+'｜'+(p.name||p.date||'')+(isExcl(pid)?'（門市獨賣）':''))+'</option>';});
+    });
+    sp.innerHTML=h;if(cur)sp.value=cur;schedState.pid=sp.value;
+  }
+  var st=$('sch_tab');
+  if(st){
+    var curT=schedState.tab||st.value;
+    var h2='<option value="">— 選擇工作表 —</option>';
+    schedState.tabs.forEach(function(t){h2+='<option value="'+esc(t)+'">'+esc(t)+'</option>';});
+    if(curT&&schedState.tabs.indexOf(curT)<0)h2+='<option value="'+esc(curT)+'" selected>'+esc(curT)+'</option>';
+    st.innerHTML=h2;if(curT)st.value=curT;schedState.tab=st.value;
+  }
+  if($('cfg_gsid')&&document.activeElement!==$('cfg_gsid'))$('cfg_gsid').value=CONFIG.gsheetId||'';
+  if($('cfg_gscl')&&document.activeElement!==$('cfg_gscl'))$('cfg_gscl').value=CONFIG.gsheetClient||'';
+}
+function renderSchedResult(){
+  var el=$('schedResult');if(!el)return;
+  var res=schedState.result;
+  if(!res){return;}
+  var list=res.list.slice().sort(function(a,b){
+    var ra=a.status==='ok'?0:1,rb=b.status==='ok'?0:1;
+    if(ra!==rb)return ra-rb;
+    if(ra===0)return a.row-b.row;
+    return String(a.styleNo).localeCompare(String(b.styleNo));
+  });
+  if(!list.length){el.innerHTML='<p class="hint">這個檔期還沒有款式。</p>';return;}
+  var h='<div style="overflow:auto"><table class="sh-tbl" style="font-size:12.5px"><tr><th>款號</th><th>排程列</th>';
+  SCHED_COLS.forEach(function(c){h+='<th>'+esc(c.label)+'</th>';});
+  h+='<th>狀態</th></tr>';
+  list.forEach(function(o){
+    if(o.status!=='ok'){
+      h+='<tr><td>'+esc(o.styleNo||'（沒填款號）')+'</td><td>—</td><td colspan="'+SCHED_COLS.length+'" style="color:var(--danger)">'+
+        (o.status==='nomatch'?'排程裡找不到這個款號':'這張下單卡沒有款號')+'</td><td>略過</td></tr>';
+      return;
+    }
+    h+='<tr><td><b>'+esc(o.styleNo)+'</b></td><td>'+o.row+'</td>';
+    SCHED_COLS.forEach(function(c,i){
+      var v=String(o.vals[i]==null?'':o.vals[i]);
+      h+='<td style="white-space:pre-line;'+(c.keep?'color:var(--muted)':'')+'">'+(v?esc(v):'—')+'</td>';
+    });
+    h+='<td>'+(o.kept?'<span style="color:var(--orange)">保留備註</span>':'可寫入')+'</td></tr>';
+  });
+  h+='</table></div>';
+  var okN=list.filter(function(o){return o.status==='ok';}).length;
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center">'+
+    '<button class="btn btn-primary" id="sch_write">寫入排程（'+okN+' 款）</button>'+
+    '<button class="btn btn-ghost btn-sm" id="sch_copy">只複製，我自己貼</button>'+
+    '<span class="hint">灰色那欄（實際交貨數量）是排程原本的內容，寫入時原封不動。</span></div>';
+  el.innerHTML=h;
+  $('sch_write').addEventListener('click',schedWrite);
+  $('sch_copy').addEventListener('click',schedCopy);
+}
+function wireSched(){
+  $('sch_savecfg').addEventListener('click',function(){
+    CONFIG.gsheetId=$('cfg_gsid').value.trim();
+    CONFIG.gsheetClient=$('cfg_gscl').value.trim();
+    saveCfgAll();toast('已儲存');
+  });
+  $('sch_tabs').addEventListener('click',function(){$('schedErr').hidden=true;schedLoadTabs();});
+  $('sch_cmp').addEventListener('click',function(){$('schedErr').hidden=true;schedCompare();});
+  $('sch_period').addEventListener('change',function(){schedState.pid=this.value;});
+  $('sch_tab').addEventListener('change',function(){schedState.tab=this.value;});
+}
+function renderSched(){
+  if(!isAdmin()){$('page-sched').innerHTML='<div class="card"><p class="hint">這個頁面僅主管可用。</p></div>';return;}
+  if(!schedRendered){$('page-sched').innerHTML=schedHtml();wireSched();schedRendered=true;}
+  fillSchedSelects();renderSchedResult();
+  if(schedState.busy)schedBusy(schedState.busy);
+}
+
 /* ---------- Excel 匯出 ---------- */
 function exportExcel(){
   if(!isAdmin()){toast('僅主管可匯出');return;}
@@ -3006,7 +3315,7 @@ function exportExcel(){
   ids.forEach(function(id){
     var it=ITEMS[id];var p=PERIODS[it.periodId]||{};
     var ot=itemOrderTotal(it),at=itemAllocTotalCfg(it);
-    s2.push([p.name||'',it.styleNo||'',it.styleType||'',it.category||'',it.categoryGroup||'',it.vendor||'',num(it.price),twd(it.price),ot,at,ot-at,Math.round(ot*num(it.price)),twd(ot*num(it.price)),it.orderDate||'',it.sampleDate||'',it.deliveryDate||'',it.prodDays||'',it.onShelf||'',it.freight||'',it.ship||'',it.pay||'',num(it.moq)||'',it.qc||'',it.devType||'',it.accessory||'',it.labelNote||'',it.tag||'']);
+    s2.push([p.name||'',it.styleNo||'',it.styleType||'',it.category||'',it.categoryGroup||'',it.vendor||'',num(it.price),twd(it.price),ot,at,ot-at,Math.round(ot*num(it.price)),twd(ot*num(it.price)),it.orderDate||'',it.sampleDate||'',it.deliveryDate||'',it.prodDays||'',it.onShelf||'',it.freight||'',it.ship||'',it.pay||'',(it.moq==null?'':String(it.moq)),it.qc||'',it.devType||'',it.accessory||'',it.labelNote||'',it.tag||'']);
   });
 
   var h3=['檔期','款號','顏色','尺寸','訂購數'].concat(CONFIG.stores).concat(['官網','已配','留倉']);
