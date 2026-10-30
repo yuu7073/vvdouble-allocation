@@ -3004,26 +3004,16 @@ function wireSheet(){
 }
 
 /* ---------- 採購排程（Google 試算表串接） ---------- */
-var SCHED_COLS=[
-  {col:'AG',label:'預定頭單',pick:function(r){return num(r.orderQty);}},
-  {col:'AH',label:'官網頭單',pick:function(r){return num(r.web);}},
-  {col:'AI',label:'忠孝頭單',store:'忠孝'},
-  {col:'AJ',label:'統一頭單',store:'統一'},
-  {col:'AK',label:'桃園頭單',store:'桃園'},
-  {col:'AL',label:'台南頭單',store:'台南'},
-  {col:'AM',label:'新一中（鴻海直送）',store:'新一中'},
-  {col:'AN',label:'台中一中頭單',store:'一中'},
-  {col:'AO',label:'高雄頭單',store:'高雄'},
-  {col:'AP',label:'實際交貨數量',keep:true},
-  {col:'AQ',label:'追加MOQ',field:'moq'},
-  {col:'AR',label:'做貨天數',field:'prodDays'}
-];
-var SCHED_FIRST='AG',SCHED_LAST='AR',SCHED_MAXROW=400;
+var SCHED_MAXROW=400,SCHED_MAXCOL=78;
+var STORE_ALIAS={'一中':['台中一中頭單','一中頭單','台中一中'],'新一中':['新一中鴻海直送','新一中頭單','新一中']};
 var schedState={tab:'',pid:'',tabs:[],result:null,busy:''};
 var schedRendered=false;
 
+function colLetter(i){var s='';i=i+1;while(i>0){var m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
+function normHead(h){return String(h==null?'':h).replace(/\s+/g,'');}
+
 /* --- 格子內容 --- */
-function uniqBy(list,f){var out=[],seen={};list.forEach(function(x){var k=String(f(x)||'');if(!seen[k]){seen[k]=1;out.push(k);}});return out;}
+function uniqBy(list,f){var out=[],seen={};list.forEach(function(x){var k=String(f(x)||'');if(k&&!seen[k]){seen[k]=1;out.push(k);}});return out;}
 function schedCell(rows,pick){
   var cols=uniqBy(rows,function(r){return r.color;});
   var sizes=uniqBy(rows,function(r){return r.size;});
@@ -3040,24 +3030,48 @@ function schedCell(rows,pick){
   return lines.join('\n');
 }
 function schedIsNote(l){l=String(l||'').trim();if(!l)return false;if(/^[（(]/.test(l))return true;return !/\d\s*[)）]?$/.test(l);}
-function schedKeepNotes(oldText){
-  return String(oldText||'').split('\n').filter(schedIsNote);
-}
-function schedProdDays(v){v=String(v||'').trim();if(!v)return '';return /^[0-9]+$/.test(v)?v+'天':v;}
-function schedValuesFor(it,oldRow){
-  oldRow=oldRow||[];
-  var rows=arr(it.rows);
-  return SCHED_COLS.map(function(c,i){
-    var old=oldRow[i]==null?'':String(oldRow[i]);
-    if(c.keep)return old;
-    var v;
-    if(c.field)v=c.field==='prodDays'?schedProdDays(it.prodDays):String(it[c.field]==null?'':it[c.field]).trim();
-    else v=schedCell(rows,c.pick||function(r){return (r.alloc&&r.alloc[c.store])||0;});
-    if(c.field)return v;
-    var notes=schedKeepNotes(old);
-    if(notes.length)v=(v?v+'\n':'')+notes.join('\n');
-    return v;
+function schedKeepNotes(oldText){return String(oldText||'').split('\n').filter(schedIsNote);}
+function schedProdDays(v){v=String(v||'').trim();if(!v)return '';return /^[0-9]+(\s*[-~]\s*[0-9]+)?$/.test(v)?v.replace(/\s/g,'')+'天':v;}
+
+/* --- 依標題列找欄位 --- */
+function schedTargets(head){
+  var norm=(head||[]).map(normHead),used={},cols=[],ex=[],miss=[];
+  function find(cands){
+    for(var c=0;c<cands.length;c++)for(var i=0;i<norm.length;i++)if(!used[i]&&norm[i]===cands[c]){used[i]=1;return i;}
+    return -1;
+  }
+  var style=find(['款號']);
+  function add(cands,label,fn){var i=find(cands);if(i<0){miss.push(label);return;}cols.push({i:i,label:label,fn:fn,note:true});}
+  add(['預定頭單'],'預定頭單',function(it){return schedCell(arr(it.rows),function(r){return num(r.orderQty);});});
+  add(['官網頭單'],'官網頭單',function(it){return schedCell(arr(it.rows),function(r){return num(r.web);});});
+  (CONFIG.stores||[]).slice().sort(function(a,b){return String(b).length-String(a).length;}).forEach(function(s){
+    add((STORE_ALIAS[s]||[]).concat([s+'頭單',s]),s,function(it){
+      return schedCell(arr(it.rows),function(r){return (r.alloc&&r.alloc[s])||0;});
+    });
   });
+  var iM=find(['追加MOQ','追加moq']);
+  if(iM<0)miss.push('追加MOQ');else cols.push({i:iM,label:'追加MOQ',fn:function(it){return String(it.moq==null?'':it.moq).trim();},note:false});
+  var iD=find(['做貨天數']);
+  if(iD<0)miss.push('做貨天數');else cols.push({i:iD,label:'做貨天數',fn:function(it){return schedProdDays(it.prodDays);},note:false});
+  function addEx(cands,fn){var i=find(cands);if(i>=0)ex.push({i:i,fn:fn});}
+  addEx(['品檢單位'],function(it){return it.qc||'';});
+  addEx(['款別'],function(it){return it.styleType||'';});
+  addEx(['廠商'],function(it){return it.vendor||'';});
+  addEx(['批價'],function(it){return num(it.price)||'';});
+  addEx(['顏色'],function(it){return uniqBy(arr(it.rows),function(r){return r.color;}).join('\n');});
+  addEx(['規格'],function(it){return uniqBy(arr(it.rows),function(r){return r.size;}).join('\n');});
+  cols.sort(function(a,b){return a.i-b.i;});
+  return {style:style,cols:cols,ex:ex,miss:miss};
+}
+function schedRowCells(it,oldRow,T,lo,hi){
+  var cells=[];
+  for(var k=lo;k<=hi;k++)cells.push(oldRow&&oldRow[k]!=null?String(oldRow[k]):'');
+  T.cols.forEach(function(c){
+    var v=c.fn(it);
+    if(c.note){var notes=schedKeepNotes(oldRow&&oldRow[c.i]||'');if(notes.length)v=(v?v+'\n':'')+notes.join('\n');}
+    cells[c.i-lo]=v;
+  });
+  return cells;
 }
 
 /* --- Google 授權 --- */
@@ -3147,31 +3161,31 @@ function schedCompare(){
   if(!CONFIG.gsheetId){toast('請先填排程試算表 ID');return;}
   schedBusy('讀取排程內容…');
   var q=schedQuote(tab);
-  var url=encodeURIComponent(CONFIG.gsheetId)+'/values:batchGet'
-    +'?ranges='+encodeURIComponent(q+'!M1:M'+SCHED_MAXROW)
-    +'&ranges='+encodeURIComponent(q+'!'+SCHED_FIRST+'1:'+SCHED_LAST+SCHED_MAXROW)
-    +'&majorDimension=ROWS';
+  var url=encodeURIComponent(CONFIG.gsheetId)+'/values/'
+    +encodeURIComponent(q+'!A1:'+colLetter(SCHED_MAXCOL-1)+SCHED_MAXROW);
   gsApi(url,null,function(err,j){
     schedBusy('');
     if(err){schedErr(err);return;}
-    var mCol=arr(((arr(j.valueRanges)[0])||{}).values).map(function(r){return String((r&&r[0])||'').trim();});
-    var block=arr(((arr(j.valueRanges)[1])||{}).values);
+    var rows=arr(j.values),head=rows[0]||[];
+    var T=schedTargets(head);
+    if(T.style<0){schedErr('這張工作表找不到「款號」欄，請確認選對工作表');return;}
+    if(!T.cols.length){schedErr('這張工作表找不到任何頭單欄位');return;}
+    var lo=T.cols[0].i,hi=T.cols[T.cols.length-1].i;
     var idx={};
-    mCol.forEach(function(v,i){if(v&&idx[v]==null)idx[v]=i;});
+    rows.forEach(function(r,i){if(!i)return;var v=String((r&&r[T.style])||'').trim();if(v&&idx[v]==null)idx[v]=i;});
     var out=[];
     itemsOfPeriods([pid]).forEach(function(id){
       var it=ITEMS[id];if(!it)return;
       var sn=String(it.styleNo||'').trim();
-      var row=sn?idx[sn]:null;
       if(!sn){out.push({id:id,styleNo:'',status:'nostyle'});return;}
+      var row=idx[sn];
       if(row==null){out.push({id:id,styleNo:sn,status:'nomatch'});return;}
-      var oldRow=block[row]||[];
-      var vals=schedValuesFor(it,oldRow);
+      var oldRow=rows[row]||[];
       var kept=false;
-      SCHED_COLS.forEach(function(c,i){if(!c.keep&&!c.field&&schedKeepNotes(oldRow[i]||'').length)kept=true;});
-      out.push({id:id,styleNo:sn,status:'ok',row:row+1,vals:vals,kept:kept});
+      T.cols.forEach(function(c){if(c.note&&schedKeepNotes(oldRow[c.i]||'').length)kept=true;});
+      out.push({id:id,styleNo:sn,status:'ok',row:row+1,cells:schedRowCells(it,oldRow,T,lo,hi),kept:kept});
     });
-    schedState.result={tab:tab,pid:pid,list:out};
+    schedState.result={tab:tab,pid:pid,list:out,T:T,lo:lo,hi:hi,head:head};
     renderSchedResult();
     var okN=out.filter(function(o){return o.status==='ok';}).length;
     toast('比對完成：'+okN+' 款對得上，共 '+out.length+' 款');
@@ -3184,11 +3198,9 @@ function schedWrite(){
   if(!res){toast('請先按「比對」');return;}
   var list=res.list.filter(function(o){return o.status==='ok';});
   if(!list.length){toast('沒有可寫入的款式');return;}
-  if(!confirm('要把 '+list.length+' 款寫進「'+res.tab+'」嗎？\n（實際交貨數量那一欄不會動）')) return;
-  var q=schedQuote(res.tab);
-  var data=list.map(function(o){
-    return {range:q+'!'+SCHED_FIRST+o.row+':'+SCHED_LAST+o.row,majorDimension:'ROWS',values:[o.vals]};
-  });
+  if(!confirm('要把 '+list.length+'款寫進「'+res.tab+'」嗎？\n（沒有對應欄位的內容不會變）'))return;
+  var q=schedQuote(res.tab),a=colLetter(res.lo),b=colLetter(res.hi);
+  var data=list.map(function(o){return {range:q+'!'+a+o.row+':'+b+o.row,majorDimension:'ROWS',values:[o.cells]};});
   schedBusy('寫入排程…');
   gsApi(encodeURIComponent(CONFIG.gsheetId)+'/values:batchUpdate',
     {method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:data})},
@@ -3199,27 +3211,56 @@ function schedWrite(){
     });
 }
 
+/* --- 新增找不到的款號 --- */
+function schedAppend(){
+  var res=schedState.result;
+  if(!res){toast('請先按「比對」');return;}
+  var T=res.T;
+  var list=res.list.filter(function(o){return o.status==='nomatch';});
+  if(!list.length){toast('沒有找不到的款號');return;}
+  if(!confirm('要把 '+list.length+' 款新增到「'+res.tab+'」的最下面嗎？\n只會填款號、廠商、批價、顏色、規格、品檢、款別跟頭單資料，其他欄位要你自己補。'))return;
+  var width=res.hi+1;
+  var values=list.map(function(o){
+    var it=ITEMS[o.id]||{},r=[],k;
+    for(k=0;k<width;k++)r.push('');
+    if(T.style>=0)r[T.style]=o.styleNo;
+    T.ex.forEach(function(c){r[c.i]=c.fn(it);});
+    T.cols.forEach(function(c){r[c.i]=c.fn(it);});
+    return r;
+  });
+  schedBusy('新增到排程…');
+  gsApi(encodeURIComponent(CONFIG.gsheetId)+'/values/'+encodeURIComponent(schedQuote(res.tab)+'!A1')
+      +':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',
+    {method:'POST',body:JSON.stringify({values:values})},
+    function(err,j){
+      schedBusy('');
+      if(err){schedErr(err);return;}
+      toast('已新增 '+list.length+' 列，請再按一次「比對」');
+    });
+}
+
 /* --- 複製（備用） --- */
 function schedCopy(){
   var res=schedState.result;
   if(!res){toast('請先按「比對」');return;}
   var list=res.list.filter(function(o){return o.status==='ok';});
   if(!list.length){toast('沒有可複製的款式');return;}
-  var head=['排程列','款號'].concat(SCHED_COLS.map(function(c){return c.label;}));
+  var head=['排程列','款號'],k;
+  for(k=res.lo;k<=res.hi;k++)head.push(normHead(res.head[k])||colLetter(k));
   var lines=[head.join('\t')];
   list.forEach(function(o){
-    lines.push([o.row,o.styleNo].concat(o.vals.map(function(v){
+    lines.push([o.row,o.styleNo].concat(o.cells.map(function(v){
       v=String(v==null?'':v);
       return /[\t\n"]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
     })).join('\t'));
   });
   var txt=lines.join('\n');
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast('已複製，可貼到試算表');},function(){schedFallbackCopy(txt);});
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast('已複製');},function(){schedFallbackCopy(txt);});
   else schedFallbackCopy(txt);
 }
 function schedFallbackCopy(txt){
   var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();
-  try{document.execCommand('copy');toast('已複製，可貼到試算表');}catch(e){toast('複製失敗，請手動選取');}
+  try{document.execCommand('copy');toast('已複製');}catch(e){toast('複製失敗，請手動選取');}
   document.body.removeChild(ta);
 }
 
@@ -3245,7 +3286,7 @@ function schedHtml(){
     '<div class="fld" style="min-width:300px"><label>排程工作表</label><select id="sch_tab"></select></div>'+
     '<button class="btn btn-primary btn-sm" id="sch_cmp" style="margin-bottom:12px">比對</button>'+
     '</div>'+
-    '<p class="hint">會寫入：預定頭單、官網頭單、各店頭單、追加MOQ、做貨天數。<b>實際交貨數量不會動</b>；原本括號裡的備註會留在格子最後面。</p>'+
+    '<p class="hint">欄位是<b>照工作表第一列的標題去對</b>的，所以每張排程欄位順序不同也沒關係。沒有對應標題的欄位（例如實際交貨數量）完全不會動；原本括號裡的備註會留在格子最後面。</p>'+
     '<div id="schedBusy" class="hint" hidden></div><div id="schedErr" class="hint" style="color:var(--danger)" hidden></div>'+
     '</div>'+
 
@@ -3273,8 +3314,8 @@ function fillSchedSelects(){
 }
 function renderSchedResult(){
   var el=$('schedResult');if(!el)return;
-  var res=schedState.result;
-  if(!res){return;}
+  var res=schedState.result;if(!res)return;
+  var T=res.T,k;
   var list=res.list.slice().sort(function(a,b){
     var ra=a.status==='ok'?0:1,rb=b.status==='ok'?0:1;
     if(ra!==rb)return ra-rb;
@@ -3282,30 +3323,37 @@ function renderSchedResult(){
     return String(a.styleNo).localeCompare(String(b.styleNo));
   });
   if(!list.length){el.innerHTML='<p class="hint">這個檔期還沒有款式。</p>';return;}
-  var h='<div style="overflow:auto"><table class="sh-tbl" style="font-size:12.5px"><tr><th>款號</th><th>排程列</th>';
-  SCHED_COLS.forEach(function(c){h+='<th>'+esc(c.label)+'</th>';});
+  var mapped={};T.cols.forEach(function(c){mapped[c.i]=1;});
+  var h='';
+  if(T.miss.length)h+='<div class="hint" style="color:var(--orange);margin-bottom:10px">這張工作表沒有「'+esc(T.miss.join('、'))+'」欄位，這些資料不會寫過去。</div>';
+  h+='<div style="overflow:auto"><table class="sh-tbl" style="font-size:12.5px"><tr><th>款號</th><th>排程列</th>';
+  for(k=res.lo;k<=res.hi;k++)h+='<th'+(mapped[k]?'':' style="color:var(--muted);font-weight:400"')+'>'+esc(normHead(res.head[k])||colLetter(k))+'</th>';
   h+='<th>狀態</th></tr>';
+  var span=res.hi-res.lo+1;
   list.forEach(function(o){
     if(o.status!=='ok'){
-      h+='<tr><td>'+esc(o.styleNo||'（沒填款號）')+'</td><td>—</td><td colspan="'+SCHED_COLS.length+'" style="color:var(--danger)">'+
-        (o.status==='nomatch'?'排程裡找不到這個款號':'這張下單卡沒有款號')+'</td><td>略過</td></tr>';
+      h+='<tr><td>'+esc(o.styleNo||'（沒填款號）')+'</td><td>—</td><td colspan="'+span+'" style="color:var(--danger)">'+
+        (o.status==='nomatch'?'排程裡還沒有這個款號':'這張下單卡沒有款號')+'</td><td>略過</td></tr>';
       return;
     }
     h+='<tr><td><b>'+esc(o.styleNo)+'</b></td><td>'+o.row+'</td>';
-    SCHED_COLS.forEach(function(c,i){
-      var v=String(o.vals[i]==null?'':o.vals[i]);
-      h+='<td style="white-space:pre-line;'+(c.keep?'color:var(--muted)':'')+'">'+(v?esc(v):'—')+'</td>';
-    });
+    for(k=res.lo;k<=res.hi;k++){
+      var v=String(o.cells[k-res.lo]==null?'':o.cells[k-res.lo]);
+      h+='<td style="white-space:pre-line;'+(mapped[k]?'':'color:var(--muted)')+'">'+(v?esc(v):'—')+'</td>';
+    }
     h+='<td>'+(o.kept?'<span style="color:var(--orange)">保留備註</span>':'可寫入')+'</td></tr>';
   });
   h+='</table></div>';
   var okN=list.filter(function(o){return o.status==='ok';}).length;
+  var noN=list.filter(function(o){return o.status==='nomatch';}).length;
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center">'+
     '<button class="btn btn-primary" id="sch_write">寫入排程（'+okN+' 款）</button>'+
+    (noN?'<button class="btn btn-ghost" id="sch_append" style="color:var(--orange)">把找不到的 '+noN+' 款新增到排程最後</button>':'')+
     '<button class="btn btn-ghost btn-sm" id="sch_copy">只複製，我自己貼</button>'+
-    '<span class="hint">灰色那欄（實際交貨數量）是排程原本的內容，寫入時原封不動。</span></div>';
+    '<span class="hint">灰色欄位是排程原本的內容，寫入時原封不動。</span></div>';
   el.innerHTML=h;
   $('sch_write').addEventListener('click',schedWrite);
+  if($('sch_append'))$('sch_append').addEventListener('click',schedAppend);
   $('sch_copy').addEventListener('click',schedCopy);
 }
 function wireSched(){
