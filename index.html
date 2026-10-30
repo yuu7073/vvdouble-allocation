@@ -3071,6 +3071,7 @@ function schedRowCells(it,oldRow,T,lo,hi){
   T.cols.forEach(function(c){
     var v=c.fn(it);
     if(c.note){var notes=schedKeepNotes(oldRow&&oldRow[c.i]||'');if(notes.length)v=(v?v+'\n':'')+notes.join('\n');}
+    else if(!String(v).trim())return;   /* 追加MOQ、做貨天數：工具沒填就保留排程原本的 */
     cells[c.i-lo]=v;
   });
   return cells;
@@ -3182,6 +3183,7 @@ function schedCompare(){
       if(!sn){out.push({id:id,styleNo:'',status:'nostyle'});return;}
       var row=idx[sn];
       if(row==null){out.push({id:id,styleNo:sn,status:'nomatch'});return;}
+      if(!schedCell(arr(it.rows),function(r){return num(r.orderQty);})){out.push({id:id,styleNo:sn,status:'noqty',row:row+1});return;}
       var oldRow=rows[row]||[];
       var kept=false;
       T.cols.forEach(function(c){if(c.note&&schedKeepNotes(oldRow[c.i]||'').length)kept=true;});
@@ -3343,8 +3345,8 @@ function renderSchedResult(){
   var span=res.hi-res.lo+1;
   list.forEach(function(o){
     if(o.status!=='ok'){
-      h+='<tr><td>'+esc(o.styleNo||'（沒填款號）')+'</td><td>—</td><td colspan="'+span+'" style="color:var(--danger)">'+
-        (o.status==='nomatch'?'排程裡還沒有這個款號':'這張下單卡沒有款號')+'</td><td>略過</td></tr>';
+      h+='<tr><td>'+esc(o.styleNo||'（沒填款號）')+'</td><td>'+(o.row||'—')+'</td><td colspan="'+span+'" style="color:var(--danger)">'+
+        (o.status==='nomatch'?'排程裡還沒有這個款號':(o.status==='noqty'?'這張下單卡還沒填訂購數':'這張下單卡沒有款號'))+'</td><td>略過</td></tr>';
       return;
     }
     h+='<tr><td><b>'+esc(o.styleNo)+'</b></td><td>'+o.row+'</td>';
