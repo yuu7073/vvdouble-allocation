@@ -586,7 +586,6 @@ hidden,[hidden]{display:none !important}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 </content>
 </invoke>
 <script>
@@ -826,6 +825,7 @@ function normalizeConfig(v){
 
 /* ---------- 啟動 ---------- */
 function init(){
+  gsCatchRedirect();gsLoadToken();
   wireStatic();
   if(DEMO){
     $('demoBanner').hidden=false;seedDemo();
@@ -842,6 +842,7 @@ function init(){
     function grant(r){
       ROLE=r.role;
       $('tabSched').hidden=!isAdmin();
+      if(isAdmin()&&gsSS('gsBack')==='sched'){gsSS('gsBack',null);setTimeout(function(){switchTab('sched');},300);}
       $('login').hidden=true;$('userBox').hidden=false;
       $('userEmail').textContent=(r.name?r.name+'｜':'')+u.email+(ROLE==='admin'?'（主管）':'（一般）');
       startData();
@@ -3060,22 +3061,34 @@ function schedValuesFor(it,oldRow){
 
 /* --- Google 授權 --- */
 var gToken=null,gTokenExp=0;
-function gsReady(){return typeof google!=='undefined'&&google.accounts&&google.accounts.oauth2;}
+var GS_SCOPE='https://www.googleapis.com/auth/spreadsheets';
+function gsRedirectUri(){return location.origin+location.pathname;}
+function gsSS(k,v){try{if(v===undefined)return sessionStorage.getItem(k);if(v===null)sessionStorage.removeItem(k);else sessionStorage.setItem(k,v);}catch(e){}return null;}
+function gsStoreToken(tok,exp){gToken=tok;gTokenExp=Date.now()+((num(exp)||3500)*1000)-60000;gsSS('gsTok',tok);gsSS('gsExp',String(gTokenExp));}
+function gsForget(){gToken=null;gTokenExp=0;gsSS('gsTok',null);gsSS('gsExp',null);}
+function gsLoadToken(){var t=gsSS('gsTok'),e=num(gsSS('gsExp'));if(t&&e>Date.now()){gToken=t;gTokenExp=e;}}
+function gsLinked(){return !!(gToken&&Date.now()<gTokenExp);}
+function gsCatchRedirect(){
+  var h=String(location.hash||'');
+  if(h.indexOf('access_token=')<0&&h.indexOf('error=')<0)return;
+  var p={};
+  h.replace(/^#/,'').split('&').forEach(function(kv){var i=kv.indexOf('=');if(i>0)p[decodeURIComponent(kv.slice(0,i))]=decodeURIComponent(kv.slice(i+1).replace(/\+/g,' '));});
+  if(p.access_token)gsStoreToken(p.access_token,p.expires_in);
+  else if(p.error)gsSS('gsErr',p.error_description||p.error);
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(e){location.hash='';}
+}
+function gsBeginAuth(){
+  if(!CONFIG.gsheetClient){toast('請先填 Google 授權用戶端 ID 並儲存');return;}
+  gsSS('gsBack','sched');
+  location.href='https://accounts.google.com/o/oauth2/v2/auth'
+    +'?client_id='+encodeURIComponent(CONFIG.gsheetClient)
+    +'&redirect_uri='+encodeURIComponent(gsRedirectUri())
+    +'&response_type=token&include_granted_scopes=true&prompt=consent'
+    +'&scope='+encodeURIComponent(GS_SCOPE);
+}
 function gsAuth(cb){
-  if(gToken&&Date.now()<gTokenExp){cb(null,gToken);return;}
-  if(!CONFIG.gsheetClient){cb('還沒設定「Google 授權用戶端 ID」');return;}
-  if(!gsReady()){cb('Google 授權元件還沒載入完，等幾秒再按一次');return;}
-  try{
-    google.accounts.oauth2.initTokenClient({
-      client_id:CONFIG.gsheetClient,
-      scope:'https://www.googleapis.com/auth/spreadsheets',
-      callback:function(resp){
-        if(resp&&resp.access_token){gToken=resp.access_token;gTokenExp=Date.now()+((num(resp.expires_in)||3500)*1000)-60000;cb(null,gToken);}
-        else cb('授權沒有完成');
-      },
-      error_callback:function(){cb('授權視窗被關掉，或被瀏覽器的彈出視窗阻擋');}
-    }).requestAccessToken({prompt:''});
-  }catch(e){cb('授權失敗：'+(e&&e.message||e));}
+  if(gsLinked()){cb(null,gToken);return;}
+  cb('\u5c1a\u672a\u9023\u7dda Google\uff0c\u8acb\u5148\u6309\u4e0a\u65b9\u7684\u300c\u9023\u7dda Google\u300d');
 }
 function gsApi(path,opts,cb){
   gsAuth(function(err,tok){
@@ -3087,7 +3100,7 @@ function gsApi(path,opts,cb){
       return r.json().then(function(j){return {ok:r.ok,code:r.status,j:j};},function(){return {ok:r.ok,code:r.status,j:{}};});
     }).then(function(o){
       if(!o.ok){
-        if(o.code===401){gToken=null;}
+        if(o.code===401){gsForget();if($('sch_link'))renderSched();}
         cb((o.j&&o.j.error&&o.j.error.message)||('試算表回應錯誤（'+o.code+'）'));return;
       }
       cb(null,o.j);
@@ -3204,8 +3217,10 @@ function schedHtml(){
     '</div>'+
     '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">'+
     '<button class="btn btn-primary btn-sm" id="sch_savecfg">儲存設定</button>'+
-    '<button class="btn btn-ghost btn-sm" id="sch_tabs">讀取工作表清單</button></div>'+
-    '<p class="hint">第一次按「讀取工作表清單」時，Google 會跳出授權視窗，請用有編輯排程權限的帳號同意一次。</p></div>'+
+    '<button class="btn '+(gsLinked()?'btn-ghost':'btn-primary')+' btn-sm" id="sch_link">'+(gsLinked()?'重新連線 Google':'連線 Google')+'</button>'+
+    '<button class="btn btn-ghost btn-sm" id="sch_tabs">讀取工作表清單</button>'+
+    '<span class="hint" style="align-self:center">'+(gsLinked()?'<b style="color:var(--blue-dark)">已連線</b>':'尚未連線')+'</span></div>'+
+    '<p class="hint">按「連線 Google」會跳到 Google 的授權頁，同意後會自己回到這一頁。連線效期約一小時，過了再按一次就好。</p></div>'+
 
     '<div class="card"><h3>帶入排程</h3>'+
     '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">'+
@@ -3282,14 +3297,17 @@ function wireSched(){
     CONFIG.gsheetClient=$('cfg_gscl').value.trim();
     saveCfgAll();toast('已儲存');
   });
+  $('sch_link').addEventListener('click',gsBeginAuth);
   $('sch_tabs').addEventListener('click',function(){$('schedErr').hidden=true;schedLoadTabs();});
   $('sch_cmp').addEventListener('click',function(){$('schedErr').hidden=true;schedCompare();});
   $('sch_period').addEventListener('change',function(){schedState.pid=this.value;});
   $('sch_tab').addEventListener('change',function(){schedState.tab=this.value;});
 }
+var schedLinkSig=null;
 function renderSched(){
   if(!isAdmin()){$('page-sched').innerHTML='<div class="card"><p class="hint">這個頁面僅主管可用。</p></div>';return;}
-  if(!schedRendered){$('page-sched').innerHTML=schedHtml();wireSched();schedRendered=true;}
+  if(!schedRendered||schedLinkSig!==gsLinked()){$('page-sched').innerHTML=schedHtml();wireSched();schedRendered=true;schedLinkSig=gsLinked();}
+  var ge=gsSS('gsErr');if(ge){gsSS('gsErr',null);schedErr('Google 授權沒有完成：'+ge);}
   fillSchedSelects();renderSchedResult();
   if(schedState.busy)schedBusy(schedState.busy);
 }
